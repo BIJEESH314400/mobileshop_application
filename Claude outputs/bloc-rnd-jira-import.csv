@@ -1,0 +1,71 @@
+Issue Type,Summary,Description,Labels
+Epic,Flutter BLoC R&D — CellPoint Mobile Shop,"Deepen Bloc understanding one topic at a time while building out CellPoint, so every concept lands in real, running code instead of a toy example.",bloc-rnd
+Story,"Bloc fundamentals — Cubit vs Bloc, Event to Bloc to State","Status: covered (Splash + Login flow).
+
+The core mental model: a Bloc receives Events, runs a handler, emits States. Understand why this project deliberately uses full Bloc (not Cubit) everywhere.
+
+Acceptance criteria:
+- Can explain the Event -> Bloc -> State cycle without looking at code
+- Can point to SplashBloc and LoginBloc as reference implementations",bloc-rnd
+Story,BlocProvider and MultiBlocProvider - scoping and DI,"How BlocProvider makes a Bloc available to a widget subtree, context.read/context.watch retrieve it, and MultiBlocProvider combines several. Needed once a screen needs more than one Bloc (e.g. a Products screen that also needs a Cart Bloc).
+
+Acceptance criteria:
+- Can explain the difference between context.read<T>() and context.watch<T>()
+- Has used MultiBlocProvider on at least one screen",bloc-rnd
+Story,BlocBuilder / BlocListener / BlocConsumer,"Status: covered.
+
+builder = rebuild UI; listener = one-off side effect (navigation, SnackBar); consumer = both. Never put navigation inside a plain builder.
+
+Acceptance criteria:
+- Can state the decision rule for picking between the three from memory
+- Project doc bloc-widgets-guide.md reviewed",bloc-rnd
+Story,"Equatable, buildWhen / listenWhen","Why State classes extend Equatable, and how buildWhen/listenWhen filter unnecessary rebuilds/listener calls once states carry more fields (e.g. a product list with a loading flag, an error, and the data itself all in one state).
+
+Acceptance criteria:
+- Can explain why Equatable matters for Bloc's state != newState check
+- Has added a buildWhen where it measurably reduced rebuilds",bloc-rnd
+Story,Repository pattern - data layer separation,"lib/data/repositories/ exists but is empty. A Repository wraps the actual data source (local DB, HTTP API, mock data) behind a plain Dart interface, so Blocs never talk to Hive/Dio/etc. directly - only to a Repository.
+
+Acceptance criteria:
+- Has written at least one Repository class with an interface + implementation
+- A Bloc depends on the Repository interface, not a concrete data source",bloc-rnd
+Story,Async data flow in Bloc - loading/success/error states,"The standard pattern for any screen that fetches data: a State with (at minimum) isLoading, data, errorMessage. Directly needed for the Products screen - the next build per the README.
+
+Acceptance criteria:
+- ProductsBloc has Loading/Loaded/Error states (or equivalent flags)
+- ProductsScreen renders a spinner, the list, and an error view from that one Bloc",bloc-rnd
+Story,Bloc-to-Bloc communication,"How one Bloc reacts to another's state changes - e.g. a Sales/Cart Bloc that needs to know when Products' stock changes. Usually done via StreamSubscription in the constructor, or by passing a Repository both Blocs share.
+
+Acceptance criteria:
+- Can explain at least one pattern for Bloc-to-Bloc communication
+- Identified where CellPoint will need it (Sales <-> Products stock)",bloc-rnd
+Story,Real auth/session persistence,"Replace the two TODO delays in SplashBloc._onStarted and LoginBloc._onSubmitted with real logic: a stored-token check on Splash, a real API call on Login, and secure token storage (e.g. flutter_secure_storage).
+
+Acceptance criteria:
+- SplashBloc reads a real stored token (or absence of one) to decide authenticated/unauthenticated
+- LoginBloc calls a real (or realistic mock) auth endpoint and persists the resulting token",bloc-rnd
+Story,Theming with a Cubit driving MaterialApp.themeMode,"This is the '2 themes' TODO already logged in the project status doc. A small ThemeCubit (state = ThemeMode) sits above MaterialApp, which reads it via BlocBuilder<ThemeCubit, ThemeMode> to set themeMode:. AppColors' dark palette and AppBottomNav's brightness check already exist and are ready for this.
+
+Acceptance criteria:
+- ThemeCubit exists with toggleTheme()/setTheme()
+- MaterialApp has both theme: and darkTheme: wired to it, toggleable from Profile",bloc-rnd
+Story,HydratedBloc - persisting state across app restarts,"hydrated_bloc auto-saves/restores a Bloc's state to disk. Good fit for cart contents (don't lose an in-progress sale on app kill) and the eventual theme choice (so it survives a restart).
+
+Acceptance criteria:
+- Can explain what fromJson/toJson do in a HydratedBloc
+- At least one Bloc (theme or cart) survives an app restart using it",bloc-rnd
+Story,"Bloc concurrency / event transformers (debounce, restartable)","By default every dispatched Event is processed concurrently/in order - fine until a search box dispatches an event per keystroke. The bloc_concurrency package's debounce/restartable/droppable transformers fix that. Needed once Products/Sales get a search or filter field.
+
+Acceptance criteria:
+- Can explain the difference between sequential, droppable, restartable
+- Applied a transformer to at least one search/filter Bloc",bloc-rnd
+Story,BlocObserver - global transition logging,"A single BlocObserver override (onTransition, onError) attached in main() logs every Bloc's state changes app-wide - invaluable for debugging once there are 8+ Blocs.
+
+Acceptance criteria:
+- A custom BlocObserver is set via Bloc.observer = in main()
+- Console shows transitions for at least two different Blocs",bloc-rnd
+Story,Testing Blocs - bloc_test + mocktail,"Once LoginBloc/SplashBloc (and later ProductsBloc etc.) have real logic instead of fake delays, bloc_test's blocTest() plus mocktail for faking Repositories is how you verify event -> state behavior without running the full app.
+
+Acceptance criteria:
+- At least one blocTest() covering LoginBloc's success and validation-error paths
+- Repository dependency is mocked, not real, in that test",bloc-rnd
