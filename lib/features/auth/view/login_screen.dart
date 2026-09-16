@@ -28,12 +28,14 @@ class _LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<_LoginView> {
-  final _emailController = TextEditingController();
+  final _mobileController = TextEditingController();
+  final _shopIdController = TextEditingController();
   final _passwordController = TextEditingController();
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _mobileController.dispose();
+    _shopIdController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -102,10 +104,20 @@ class _LoginViewState extends State<_LoginView> {
                   const SizedBox(height: 28),
                   _LabeledField(
                     palette: p,
-                    label: 'Email or Shop ID',
-                    controller: _emailController,
-                    icon: Icons.mail_outline_rounded,
-                    hintText: 'arjun@4bmobiles.shop',
+                    label: 'Mobile Number',
+                    controller: _mobileController,
+                    icon: Icons.call_outlined,
+                    hintText: '98765 43210',
+                    keyboardType: TextInputType.phone,
+                    maxLength: 10,
+                  ),
+                  const SizedBox(height: 16),
+                  _LabeledField(
+                    palette: p,
+                    label: 'Shop ID',
+                    controller: _shopIdController,
+                    icon: Icons.storefront_outlined,
+                    hintText: 'e.g. 4BMOBILES01',
                   ),
                   const SizedBox(height: 16),
                   _LabeledField(
@@ -152,7 +164,8 @@ class _LoginViewState extends State<_LoginView> {
                           // dispatch an Event with `.add(...)`.
                           : () => context.read<LoginBloc>().add(
                                 LoginSubmitted(
-                                  email: _emailController.text,
+                                  mobile: _mobileController.text.trim(),
+                                  shopId: _shopIdController.text.trim(),
                                   password: _passwordController.text,
                                 ),
                               ),
@@ -206,6 +219,8 @@ class _LabeledField extends StatelessWidget {
   final IconData? icon;
   final String? hintText;
   final bool obscureText;
+  final TextInputType? keyboardType;
+  final int? maxLength;
 
   const _LabeledField({
     required this.palette,
@@ -214,6 +229,8 @@ class _LabeledField extends StatelessWidget {
     this.icon,
     this.hintText,
     this.obscureText = false,
+    this.keyboardType,
+    this.maxLength,
   });
 
   @override
@@ -226,6 +243,8 @@ class _LabeledField extends StatelessWidget {
         TextField(
           controller: controller,
           obscureText: obscureText,
+          keyboardType: keyboardType,
+          maxLength: maxLength,
           style: TextStyle(color: palette.textPrimary),
           decoration: InputDecoration(
             filled: true,
@@ -235,6 +254,11 @@ class _LabeledField extends StatelessWidget {
             prefixIcon: icon == null ? null : Icon(icon, size: 18, color: palette.textSecondary),
             prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 20),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            // maxLength defaults to showing a "n/10" counter under the
+            // field — fine for the mobile number field, but this hides
+            // it for every field so Password/Shop ID (no maxLength set)
+            // don't get an empty gap, and Mobile Number stays clean too.
+            counterText: '',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: palette.border)),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: palette.border)),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
