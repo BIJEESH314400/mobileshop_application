@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "633363667077",
+    "project_id": "b-mobiles",
+    "storage_bucket": "b-mobiles.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:633363667077:android:7d00352b0ba567b62c31ec",
+        "android_client_info": {
+          "package_name": "com.fourbmobiles.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBwh3iz3w7su0TYKHmGxG8i02OD6_NwGzU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

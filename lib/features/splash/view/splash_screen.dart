@@ -42,7 +42,7 @@ class SplashScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 22),
                 const Text(
-                  'CellPoint',
+                  '4B Mobiles',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 30,

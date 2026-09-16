@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_palette.dart';
 
 /// Placeholder — customer list with search.
 class CustomersScreen extends StatelessWidget {
@@ -8,13 +8,15 @@ class CustomersScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
     return Scaffold(
+      backgroundColor: p.background,
       appBar: AppBar(title: const Text('Customers')),
-      body: const Center(
+      body: Center(
         child: Text(
           'Customers list\n(build next)',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: p.textPrimary),
         ),
       ),
     );

@@ -10,6 +10,14 @@ import '../theme/app_colors.dart';
 /// Drop this into any of those screens' Scaffold as
 /// `bottomNavigationBar: AppBottomNav(current: AppTab.dashboard)`.
 ///
+/// Tap feedback: intentionally NONE. Two things were tried and both
+/// read as an unwanted "vibrate" to the user — Material's default
+/// InkWell ripple (clipped to a CircleBorder around a tall, narrow
+/// icon+label column, so it rendered as a lopsided flash), and then
+/// an AnimatedScale press/release. Both removed. Tapping a tab just
+/// changes screens; the only visual feedback is the resulting
+/// active-tab color change, nothing plays during the tap itself.
+///
 /// Theme: reads `Theme.of(context).brightness` and switches its own
 /// palette between AppColors' light/dark constants. The app itself
 /// only has a light ThemeData today (see app_theme.dart) — adding a
@@ -77,7 +85,10 @@ class AppBottomNav extends StatelessWidget {
               ),
               // Reserved gap the floating Home button sits above —
               // "HOME" label lives here so it lines up with the row.
-              const SizedBox(width: 30, child: _HomeLabel()),
+              // No fixed width: forcing one (e.g. SizedBox(width: 30))
+              // clips "HOME" onto two lines ("HOM"/"E") — let it size
+              // to its own single-line text instead.
+              const _HomeLabel(),
               _NavItem(
                 icon: Icons.inventory_2_outlined,
                 label: 'Products',
@@ -114,7 +125,22 @@ class AppBottomNav extends StatelessWidget {
 
   void _go(BuildContext context, String route) {
     if (ModalRoute.of(context)?.settings.name == route) return;
-    Navigator.of(context).pushReplacementNamed(route);
+    final builder = AppRoutes.routes[route];
+    if (builder == null) return;
+    // Not pushReplacementNamed: that builds a default MaterialPageRoute,
+    // whose platform slide-transition animates the WHOLE new screen in
+    // from the right — bottom bar included, since the bar lives inside
+    // each screen's Scaffold. That's the "bar moves right to left" the
+    // client flagged. A zero-duration PageRouteBuilder swaps instantly
+    // instead — no slide, so the bar doesn't visibly move at all.
+    Navigator.of(context).pushReplacement(
+      PageRouteBuilder(
+        settings: RouteSettings(name: route),
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+      ),
+    );
   }
 }
 
@@ -131,6 +157,7 @@ class _HomeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
         width: 60,
@@ -168,6 +195,8 @@ class _HomeLabel extends StatelessWidget {
       padding: const EdgeInsets.only(top: 40),
       child: Text(
         'HOME',
+        softWrap: false,
+        overflow: TextOverflow.visible,
         style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w800,
@@ -201,9 +230,9 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isActive ? activeColor : inactiveColor;
-    return InkWell(
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      customBorder: const CircleBorder(),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         child: Column(
