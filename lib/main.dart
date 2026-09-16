@@ -8,6 +8,7 @@ void main() async {
   // platform channels, and initializeApp() must finish before any
   // screen tries to use Auth/Firestore — so both happen here, before
   // runApp(), rather than inside a widget.
+  //dev
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   runApp(const MobileShopApp());
