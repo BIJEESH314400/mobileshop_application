@@ -10,20 +10,30 @@ sealed class LoginEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-/// Fired when the user taps "Sign In". Carries the raw field values in
-/// with it — the Bloc never reaches into a TextEditingController itself,
-/// the View hands it everything it needs.
-///
-/// Login identifies an account by mobile number + shop ID (not email —
-/// most staff at a small shop have a phone but not necessarily an
-/// email they check), plus a password.
+/// Fired when the user taps "Sign In". Just username + password —
+/// kept deliberately simple. If the account turns out to have more
+/// than one branch, the Bloc doesn't ask for that up front; it finds
+/// out from the login response and asks via a popup afterward instead
+/// (see BranchSelected below), so a single-branch account never sees
+/// an extra field it doesn't need.
 class LoginSubmitted extends LoginEvent {
-  final String mobile;
-  final String shopId;
+  final String username;
   final String password;
 
-  const LoginSubmitted({required this.mobile, required this.shopId, required this.password});
+  const LoginSubmitted({required this.username, required this.password});
 
   @override
-  List<Object?> get props => [mobile, shopId, password];
+  List<Object?> get props => [username, password];
+}
+
+/// Fired when the user picks a branch from the popup shown after
+/// LoginSubmitted, for accounts whose login response says they have
+/// more than one shop.
+class BranchSelected extends LoginEvent {
+  final String branchId;
+
+  const BranchSelected({required this.branchId});
+
+  @override
+  List<Object?> get props => [branchId];
 }

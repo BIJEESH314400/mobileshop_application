@@ -10,10 +10,11 @@ import 'login_state.dart';
 class LoginBloc extends Bloc<LoginEvent, LoginState> {
   LoginBloc() : super(const LoginState()) {
     on<LoginSubmitted>(_onSubmitted);
+    on<BranchSelected>(_onBranchSelected);
   }
 
   Future<void> _onSubmitted(LoginSubmitted event, Emitter<LoginState> emit) async {
-    final validationError = _validate(event.mobile, event.shopId, event.password);
+    final validationError = _validate(event.username, event.password);
     if (validationError != null) {
       emit(state.copyWith(errorMessage: validationError, isSuccess: false));
       return;
@@ -21,29 +22,36 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
 
     emit(state.copyWith(isSubmitting: true, clearError: true));
 
-    // TODO: replace with a real Firebase Auth call. Firebase Auth's
-    // email/password provider needs an email-shaped identifier, so
-    // when this is wired up, build a synthetic one from these two
-    // fields instead of asking the user for a real email address,
-    // e.g.:
-    //   final syntheticEmail = '${event.mobile}@${event.shopId}.4bmobiles.app';
-    //   await FirebaseAuth.instance.signInWithEmailAndPassword(
-    //     email: syntheticEmail,
-    //     password: event.password,
-    //   );
+    // TODO: replace with a real login API call. The response should
+    // include something like `hasMultipleBranches` (a bool/bit) plus
+    // the list of branch names/ids for this account when it's true:
+    //   final result = await authApi.login(event.username, event.password);
+    //   if (result.hasMultipleBranches) {
+    //     emit(state.copyWith(
+    //       isSubmitting: false,
+    //       needsBranchSelection: true,
+    //       availableBranches: result.branches,
+    //     ));
+    //     return;
+    //   }
+    //   emit(state.copyWith(isSubmitting: false, isSuccess: true));
+    // Until that real API exists, every login behaves as single-branch
+    // (no popup) — this fake delay stands in for the call.
     await Future.delayed(const Duration(milliseconds: 1200));
 
     emit(state.copyWith(isSubmitting: false, isSuccess: true));
   }
 
-  String? _validate(String mobile, String shopId, String password) {
-    final mobileTrimmed = mobile.trim();
-    final shopIdTrimmed = shopId.trim();
-    if (mobileTrimmed.isEmpty || shopIdTrimmed.isEmpty || password.isEmpty) {
-      return 'Please enter your mobile number, shop ID and password';
-    }
-    if (!RegExp(r'^[0-9]{10}$').hasMatch(mobileTrimmed)) {
-      return 'Enter a valid 10-digit mobile number';
+  void _onBranchSelected(BranchSelected event, Emitter<LoginState> emit) {
+    // TODO: pass event.branchId to the real API / store it as the
+    // active shop context, so every later Firestore query and the
+    // Dashboard/Reports views are scoped to this branch.
+    emit(state.copyWith(isSuccess: true, needsBranchSelection: false));
+  }
+
+  String? _validate(String username, String password) {
+    if (username.trim().isEmpty || password.isEmpty) {
+      return 'Please enter your username and password';
     }
     return null;
   }

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/branch_select_dialog.dart';
 import '../bloc/login_bloc.dart';
 import '../bloc/login_event.dart';
 import '../bloc/login_state.dart';
@@ -28,14 +29,12 @@ class _LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<_LoginView> {
-  final _mobileController = TextEditingController();
-  final _shopIdController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
 
   @override
   void dispose() {
-    _mobileController.dispose();
-    _shopIdController.dispose();
+    _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -51,7 +50,17 @@ class _LoginViewState extends State<_LoginView> {
     final p = AppPalette.of(context);
 
     return BlocConsumer<LoginBloc, LoginState>(
-      listener: (context, state) {
+      listener: (context, state) async {
+        // Branch selection first — an account with more than one shop
+        // stops here after a valid username/password until the popup
+        // resolves, rather than logging straight in.
+        if (state.needsBranchSelection) {
+          final branch = await BranchSelectDialog.show(context, branches: state.availableBranches);
+          if (branch != null && context.mounted) {
+            context.read<LoginBloc>().add(BranchSelected(branchId: branch));
+          }
+          return;
+        }
         if (state.isSuccess) {
           Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
         }
@@ -104,20 +113,10 @@ class _LoginViewState extends State<_LoginView> {
                   const SizedBox(height: 28),
                   _LabeledField(
                     palette: p,
-                    label: 'Mobile Number',
-                    controller: _mobileController,
-                    icon: Icons.call_outlined,
-                    hintText: '98765 43210',
-                    keyboardType: TextInputType.phone,
-                    maxLength: 10,
-                  ),
-                  const SizedBox(height: 16),
-                  _LabeledField(
-                    palette: p,
-                    label: 'Shop ID',
-                    controller: _shopIdController,
-                    icon: Icons.storefront_outlined,
-                    hintText: 'e.g. 4BMOBILES01',
+                    label: 'Username',
+                    controller: _usernameController,
+                    icon: Icons.person_outline_rounded,
+                    hintText: 'Enter your username',
                   ),
                   const SizedBox(height: 16),
                   _LabeledField(
@@ -164,8 +163,7 @@ class _LoginViewState extends State<_LoginView> {
                           // dispatch an Event with `.add(...)`.
                           : () => context.read<LoginBloc>().add(
                                 LoginSubmitted(
-                                  mobile: _mobileController.text.trim(),
-                                  shopId: _shopIdController.text.trim(),
+                                  username: _usernameController.text.trim(),
                                   password: _passwordController.text,
                                 ),
                               ),
