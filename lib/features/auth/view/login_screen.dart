@@ -120,7 +120,7 @@ class _LoginViewState extends State<_LoginView> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () => _comingSoon(context, 'Forgot password'),
+                      onPressed: () => Navigator.of(context).pushNamed(AppRoutes.forgotPassword),
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: const Size(0, 0),

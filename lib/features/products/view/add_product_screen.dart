@@ -77,6 +77,8 @@ class _AddProductViewState extends State<_AddProductView> {
     final picked = await LookupPickerDialog.show(
       context,
       title: 'Select Category',
+      subtitle: 'Choose or create product category',
+      itemLabel: 'category',
       collection: 'categories',
       selected: _category,
     );
@@ -87,6 +89,8 @@ class _AddProductViewState extends State<_AddProductView> {
     final picked = await LookupPickerDialog.show(
       context,
       title: 'Select Brand',
+      subtitle: 'Choose or create product brand',
+      itemLabel: 'brand',
       collection: 'brands',
       selected: _brand,
     );
@@ -192,14 +196,19 @@ class _AddProductViewState extends State<_AddProductView> {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      _FieldLabel('Product Name', palette: p),
+                      _FieldLabel('Product Name', palette: p, required: true),
                       const SizedBox(height: 7),
                       _FieldBox(
                         palette: p,
                         child: TextField(
                           controller: _nameCtrl,
                           style: _fieldStyle(p),
-                          decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            hintText: 'e.g. iPhone 15 Pro Max 256GB',
+                            hintStyle: TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -245,15 +254,28 @@ class _AddProductViewState extends State<_AddProductView> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                _FieldLabel('Price (₹)', palette: p),
+                                _FieldLabel('Price (₹)', palette: p, required: true),
                                 const SizedBox(height: 7),
                                 _FieldBox(
                                   palette: p,
-                                  child: TextField(
-                                    controller: _priceCtrl,
-                                    keyboardType: TextInputType.number,
-                                    style: _fieldStyle(p),
-                                    decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                                  child: Row(
+                                    children: [
+                                      const Text('₹', style: TextStyle(fontSize: 14, color: Color(0xFF9C9CA6))),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _priceCtrl,
+                                          keyboardType: TextInputType.number,
+                                          style: _fieldStyle(p),
+                                          decoration: const InputDecoration(
+                                            border: InputBorder.none,
+                                            isDense: true,
+                                            hintText: '0.00',
+                                            hintStyle: TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -272,7 +294,12 @@ class _AddProductViewState extends State<_AddProductView> {
                                     controller: _stockCtrl,
                                     keyboardType: TextInputType.number,
                                     style: _fieldStyle(p),
-                                    decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      isDense: true,
+                                      hintText: '1',
+                                      hintStyle: TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
+                                    ),
                                   ),
                                 ),
                               ],
@@ -285,15 +312,35 @@ class _AddProductViewState extends State<_AddProductView> {
                       const SizedBox(height: 7),
                       _FieldBox(
                         palette: p,
-                        child: TextField(
-                          controller: _skuCtrl,
-                          style: _fieldStyle(p),
-                          decoration: InputDecoration(
-                            border: InputBorder.none,
-                            isDense: true,
-                            hintText: 'Scan or enter IMEI number',
-                            hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
-                          ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _skuCtrl,
+                                style: _fieldStyle(p),
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  hintText: 'Scan or enter IMEI number',
+                                  hintStyle: TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
+                                ),
+                              ),
+                            ),
+                            // Visual only for now — no camera/scanner wired up
+                            // yet, typing the SKU/IMEI by hand still works.
+                            GestureDetector(
+                              onTap: () => _comingSoon(context, 'Barcode scan'),
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: AppColors.iconTint,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: AppColors.accent),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -326,7 +373,16 @@ class _AddProductViewState extends State<_AddProductView> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      _FieldLabel('Description', palette: p),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _FieldLabel('Description', palette: p),
+                          Text(
+                            'Optional',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: p.textSecondary),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 7),
                       Container(
                         constraints: const BoxConstraints(minHeight: 80),
@@ -340,7 +396,12 @@ class _AddProductViewState extends State<_AddProductView> {
                           controller: _descCtrl,
                           maxLines: null,
                           style: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
-                          decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            hintText: 'Add key features, specifications, or warranty details...',
+                            hintStyle: TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF9C9CA6)),
+                          ),
                         ),
                       ),
                     ],
@@ -388,11 +449,20 @@ TextStyle _fieldStyle(AppPalette p) => TextStyle(fontSize: 14, color: p.textPrim
 class _FieldLabel extends StatelessWidget {
   final String text;
   final AppPalette palette;
-  const _FieldLabel(this.text, {required this.palette});
+  final bool required;
+  const _FieldLabel(this.text, {required this.palette, this.required = false});
 
   @override
   Widget build(BuildContext context) {
-    return Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: palette.textPrimary));
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: palette.textPrimary),
+        children: [
+          TextSpan(text: text),
+          if (required) const TextSpan(text: ' *', style: TextStyle(color: AppColors.danger)),
+        ],
+      ),
+    );
   }
 }
 
@@ -490,7 +560,7 @@ class _ConditionSegment extends StatelessWidget {
             style: TextStyle(
               fontSize: 12.5,
               fontWeight: FontWeight.w700,
-              color: selected ? const Color(0xFF1C1C24) : const Color(0xFF6B6B76),
+              color: selected ? AppColors.accent : const Color(0xFF6B6B76),
             ),
           ),
         ),

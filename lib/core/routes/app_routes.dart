@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../features/auth/view/forgot_password_screen.dart';
 import '../../features/auth/view/login_screen.dart';
 import '../../features/customers/view/customers_screen.dart';
 import '../../features/dashboard/view/dashboard_screen.dart';
@@ -16,6 +17,7 @@ class AppRoutes {
 
   static const splash = '/';
   static const login = '/login';
+  static const forgotPassword = '/forgot-password';
   static const dashboard = '/dashboard';
   static const products = '/products';
   static const addProduct = '/add-product';
@@ -28,6 +30,7 @@ class AppRoutes {
   static Map<String, WidgetBuilder> routes = {
     splash: (_) => const SplashScreen(),
     login: (_) => const LoginScreen(),
+    forgotPassword: (_) => const ForgotPasswordScreen(),
     dashboard: (_) => const DashboardScreen(),
     products: (_) => const ProductsScreen(),
     addProduct: (_) => const AddProductScreen(),
