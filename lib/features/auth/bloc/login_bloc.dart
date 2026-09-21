@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'login_event.dart';
@@ -8,7 +9,11 @@ import 'login_state.dart';
 /// Event, and this Bloc's `on<LoginSubmitted>` handler does the work.
 /// That indirection is the entire difference between Cubit and Bloc.
 class LoginBloc extends Bloc<LoginEvent, LoginState> {
-  LoginBloc() : super(const LoginState()) {
+  final FirebaseAuth _auth;
+
+  LoginBloc({FirebaseAuth? auth})
+      : _auth = auth ?? FirebaseAuth.instance,
+        super(const LoginState()) {
     on<LoginSubmitted>(_onSubmitted);
     on<BranchSelected>(_onBranchSelected);
   }
@@ -22,24 +27,26 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
 
     emit(state.copyWith(isSubmitting: true, clearError: true));
 
-    // TODO: replace with a real login API call. The response should
-    // include something like `hasMultipleBranches` (a bool/bit) plus
-    // the list of branch names/ids for this account when it's true:
-    //   final result = await authApi.login(event.username, event.password);
-    //   if (result.hasMultipleBranches) {
-    //     emit(state.copyWith(
-    //       isSubmitting: false,
-    //       needsBranchSelection: true,
-    //       availableBranches: result.branches,
-    //     ));
-    //     return;
-    //   }
-    //   emit(state.copyWith(isSubmitting: false, isSuccess: true));
-    // Until that real API exists, every login behaves as single-branch
-    // (no popup) — this fake delay stands in for the call.
-    await Future.delayed(const Duration(milliseconds: 1200));
+    // Firebase Auth only understands email addresses, but the Login
+    // screen only ever asks for a "username" — so we turn that username
+    // into a fixed-format email behind the scenes before talking to
+    // Firebase. The person never sees or types "@4bmobiles.app"
+    // anywhere; as far as they're concerned they just have a username.
+    final email = '${event.username.trim()}@4bmobiles.app';
 
-    emit(state.copyWith(isSubmitting: false, isSuccess: true));
+    try {
+      await _auth.signInWithEmailAndPassword(email: email, password: event.password);
+
+      emit(state.copyWith(isSubmitting: false, isSuccess: true));
+    } on FirebaseAuthException catch (e) {
+      emit(state.copyWith(isSubmitting: false, errorMessage: _messageFor(e), isSuccess: false));
+    } catch (_) {
+      emit(state.copyWith(
+        isSubmitting: false,
+        errorMessage: 'Something went wrong. Please try again.',
+        isSuccess: false,
+      ));
+    }
   }
 
   void _onBranchSelected(BranchSelected event, Emitter<LoginState> emit) {
@@ -54,5 +61,24 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       return 'Please enter your username and password';
     }
     return null;
+  }
+
+  /// Turns Firebase's error codes into messages a shop owner will
+  /// actually understand, rather than raw Firebase jargon.
+  String _messageFor(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'user-not-found':
+      case 'wrong-password':
+      case 'invalid-credential':
+        return 'Incorrect username or password';
+      case 'user-disabled':
+        return 'This account has been disabled';
+      case 'too-many-requests':
+        return 'Too many attempts. Please wait a moment and try again';
+      case 'network-request-failed':
+        return 'No internet connection. Please check your network';
+      default:
+        return 'Sign in failed. Please try again';
+    }
   }
 }

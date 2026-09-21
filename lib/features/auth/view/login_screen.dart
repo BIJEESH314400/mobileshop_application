@@ -68,18 +68,7 @@ class _LoginViewState extends State<_LoginView> {
       builder: (context, state) {
         return Scaffold(
           backgroundColor: p.background,
-          // LayoutBuilder + SingleChildScrollView + ConstrainedBox(minHeight)
-          // + IntrinsicHeight: the standard fix for "Column overflows when
-          // the keyboard opens (or on a short screen), but I still want a
-          // Spacer() to push the footer to the bottom when there's room."
-          // A plain Column doesn't scroll — once its fixed-size children
-          // (icon, heading, fields, button, footer) don't fit the
-          // available height, it overflows instead of scrolling, which is
-          // exactly what the yellow/black striped error was. Wrapping in
-          // SingleChildScrollView fixes that; ConstrainedBox(minHeight)
-          // + IntrinsicHeight is what lets Spacer() still work inside a
-          // scroll view (Expanded/Spacer normally need a bounded height,
-          // which a scroll view doesn't provide on its own).
+
           body: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -168,11 +157,7 @@ class _LoginViewState extends State<_LoginView> {
                                 ),
                               ),
                       child: state.isSubmitting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2.2, valueColor: AlwaysStoppedAnimation(Colors.white)),
-                            )
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.2, valueColor: AlwaysStoppedAnimation(Colors.white)),)
                           : const Text('Sign In', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                     ),
                   ),

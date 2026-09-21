@@ -1,34 +1,66 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/lookup_picker_dialog.dart';
+import '../bloc/add_product_bloc.dart';
+import '../bloc/add_product_event.dart';
+import '../bloc/add_product_state.dart';
 
-/// Add Product form — matches the design canvas exactly: photo upload box,
-/// Product Name / Category / Brand / Price / Stock Qty / SKU-IMEI fields,
-/// a New/Refurbished/Used condition segmented control, and a description
-/// box. Pushed on top of Products (no bottom nav, matching the canvas).
-/// Fields are real, editable — pre-filled with the canvas's own demo
-/// values — but Save doesn't persist anywhere yet, no AddProductBloc.
-class AddProductScreen extends StatefulWidget {
+/// Add Product form — matches the design canvas exactly: photo upload
+/// box, Product Name / Category / Brand / Price / Stock Qty / SKU-IMEI
+/// fields, a New/Refurbished/Used condition segmented control, and a
+/// description box. Category and Brand now open a live Firestore-backed
+/// picker (with a built-in "+ Add New") instead of showing a fixed
+/// value, and Save actually writes the product to Firestore.
+class AddProductScreen extends StatelessWidget {
   const AddProductScreen({super.key});
 
   @override
-  State<AddProductScreen> createState() => _AddProductScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => AddProductBloc(),
+      child: const _AddProductView(),
+    );
+  }
 }
 
 enum _Condition { new_, refurb, used }
 
-class _AddProductScreenState extends State<AddProductScreen> {
-  final _nameCtrl = TextEditingController(text: 'iPhone 14');
-  final _priceCtrl = TextEditingController(text: '68,999');
-  final _stockCtrl = TextEditingController(text: '12');
-  final _skuCtrl = TextEditingController();
-  final _descCtrl = TextEditingController(
-    text: '6.1" Super Retina XDR display, A15 Bionic chip, dual-camera system...',
-  );
+extension on _Condition {
+  String get label {
+    switch (this) {
+      case _Condition.new_:
+        return 'New';
+      case _Condition.refurb:
+        return 'Refurbished';
+      case _Condition.used:
+        return 'Used';
+    }
+  }
+}
 
-  String _category = 'Smartphones';
-  String _brand = 'Apple';
+class _AddProductView extends StatefulWidget {
+  const _AddProductView();
+
+  @override
+  State<_AddProductView> createState() => _AddProductViewState();
+}
+
+class _AddProductViewState extends State<_AddProductView> {
+  // Left blank on purpose (the old canvas demo pre-filled "iPhone 14" /
+  // "68,999" / "12" etc.) — now that Save actually writes to Firestore,
+  // pre-filled demo text would let someone save a fake product by
+  // mistake just by tapping Save without typing anything.
+  final _nameCtrl = TextEditingController();
+  final _priceCtrl = TextEditingController();
+  final _stockCtrl = TextEditingController();
+  final _skuCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+
+  String? _category;
+  String? _brand;
   _Condition _condition = _Condition.new_;
 
   @override
@@ -41,264 +73,317 @@ class _AddProductScreenState extends State<AddProductScreen> {
     super.dispose();
   }
 
-  void _save(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Product saved (demo) — not persisted yet')),
+  Future<void> _pickCategory() async {
+    final picked = await LookupPickerDialog.show(
+      context,
+      title: 'Select Category',
+      collection: 'categories',
+      selected: _category,
     );
-    Navigator.pop(context);
+    if (picked != null) setState(() => _category = picked);
+  }
+
+  Future<void> _pickBrand() async {
+    final picked = await LookupPickerDialog.show(
+      context,
+      title: 'Select Brand',
+      collection: 'brands',
+      selected: _brand,
+    );
+    if (picked != null) setState(() => _brand = picked);
+  }
+
+  void _save(BuildContext context) {
+    context.read<AddProductBloc>().add(
+          AddProductSubmitted(
+            name: _nameCtrl.text,
+            category: _category ?? '',
+            brand: _brand ?? '',
+            price: _priceCtrl.text,
+            stockQty: _stockCtrl.text,
+            sku: _skuCtrl.text,
+            condition: _condition.label,
+            description: _descCtrl.text,
+          ),
+        );
+  }
+
+  void _comingSoon(BuildContext context, String label) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('$label — coming soon')));
   }
 
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
 
-    return Scaffold(
-      backgroundColor: p.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
-              decoration: BoxDecoration(
-                color: p.background,
-                border: Border(bottom: BorderSide(color: p.border)),
-              ),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Row(
-                      children: [
-                        Icon(Icons.arrow_back_rounded, size: 20, color: p.textPrimary),
-                        const SizedBox(width: 14),
-                        Text(
-                          'Add Product',
-                          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: p.textPrimary),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-                children: [
-                  Center(
-                    child: GestureDetector(
-                      onTap: () => _comingSoon(context, 'Photo upload'),
-                      child: Container(
-                        width: 112,
-                        height: 112,
-                        decoration: BoxDecoration(
-                          color: p.card,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFFD8D8E0), width: 1.5),
-                        ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.add_a_photo_outlined, size: 24, color: Color(0xFF9C9CA6)),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Add Photo',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _FieldLabel('Product Name', palette: p),
-                  const SizedBox(height: 7),
-                  _FieldBox(
-                    palette: p,
-                    child: TextField(
-                      controller: _nameCtrl,
-                      style: _fieldStyle(p),
-                      decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _FieldLabel('Category', palette: p),
-                            const SizedBox(height: 7),
-                            _SelectRow(
-                              palette: p,
-                              value: _category,
-                              onTap: () => _comingSoon(context, 'Category picker'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _FieldLabel('Brand', palette: p),
-                            const SizedBox(height: 7),
-                            _SelectRow(
-                              palette: p,
-                              value: _brand,
-                              onTap: () => _comingSoon(context, 'Brand picker'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _FieldLabel('Price (₹)', palette: p),
-                            const SizedBox(height: 7),
-                            _FieldBox(
-                              palette: p,
-                              child: TextField(
-                                controller: _priceCtrl,
-                                keyboardType: TextInputType.number,
-                                style: _fieldStyle(p),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _FieldLabel('Stock Qty', palette: p),
-                            const SizedBox(height: 7),
-                            _FieldBox(
-                              palette: p,
-                              child: TextField(
-                                controller: _stockCtrl,
-                                keyboardType: TextInputType.number,
-                                style: _fieldStyle(p),
-                                decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _FieldLabel('SKU / IMEI', palette: p),
-                  const SizedBox(height: 7),
-                  _FieldBox(
-                    palette: p,
-                    child: TextField(
-                      controller: _skuCtrl,
-                      style: _fieldStyle(p),
-                      decoration: InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        hintText: 'Scan or enter IMEI number',
-                        hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _FieldLabel('Condition', palette: p),
-                  const SizedBox(height: 7),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFEFEF),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        _ConditionSegment(
-                          label: 'New',
-                          selected: _condition == _Condition.new_,
-                          onTap: () => setState(() => _condition = _Condition.new_),
-                        ),
-                        _ConditionSegment(
-                          label: 'Refurbished',
-                          selected: _condition == _Condition.refurb,
-                          onTap: () => setState(() => _condition = _Condition.refurb),
-                        ),
-                        _ConditionSegment(
-                          label: 'Used',
-                          selected: _condition == _Condition.used,
-                          onTap: () => setState(() => _condition = _Condition.used),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  _FieldLabel('Description', palette: p),
-                  const SizedBox(height: 7),
-                  Container(
-                    constraints: const BoxConstraints(minHeight: 80),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: p.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: p.border),
-                    ),
-                    child: TextField(
-                      controller: _descCtrl,
-                      maxLines: null,
-                      style: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
-                      decoration: const InputDecoration(border: InputBorder.none, isDense: true),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-              decoration: BoxDecoration(
-                color: p.card,
-                border: Border(top: BorderSide(color: p.border)),
-              ),
-              child: GestureDetector(
-                onTap: () => _save(context),
-                child: Container(
-                  height: 52,
-                  alignment: Alignment.center,
+    return BlocConsumer<AddProductBloc, AddProductState>(
+      listener: (context, state) {
+        if (state.errorMessage != null) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(SnackBar(content: Text(state.errorMessage!), backgroundColor: AppColors.danger));
+        }
+        if (state.isSuccess) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(const SnackBar(content: Text('Product saved')));
+          Navigator.pop(context);
+        }
+      },
+      builder: (context, state) {
+        return Scaffold(
+          backgroundColor: p.background,
+          body: SafeArea(
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
                   decoration: BoxDecoration(
-                    color: AppColors.accent,
-                    borderRadius: BorderRadius.circular(12),
+                    color: p.background,
+                    border: Border(bottom: BorderSide(color: p.border)),
                   ),
-                  child: const Text(
-                    'Save Product',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                  child: Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Row(
+                          children: [
+                            Icon(Icons.arrow_back_rounded, size: 20, color: p.textPrimary),
+                            const SizedBox(width: 14),
+                            Text(
+                              'Add Product',
+                              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: p.textPrimary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                    children: [
+                      Center(
+                        child: GestureDetector(
+                          onTap: () => _comingSoon(context, 'Photo upload'),
+                          child: Container(
+                            width: 112,
+                            height: 112,
+                            decoration: BoxDecoration(
+                              color: p.card,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFD8D8E0), width: 1.5),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.add_a_photo_outlined, size: 24, color: Color(0xFF9C9CA6)),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Add Photo',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _FieldLabel('Product Name', palette: p),
+                      const SizedBox(height: 7),
+                      _FieldBox(
+                        palette: p,
+                        child: TextField(
+                          controller: _nameCtrl,
+                          style: _fieldStyle(p),
+                          decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _FieldLabel('Category', palette: p),
+                                const SizedBox(height: 7),
+                                _SelectRow(
+                                  palette: p,
+                                  value: _category ?? 'Select category',
+                                  isPlaceholder: _category == null,
+                                  onTap: _pickCategory,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _FieldLabel('Brand', palette: p),
+                                const SizedBox(height: 7),
+                                _SelectRow(
+                                  palette: p,
+                                  value: _brand ?? 'Select brand',
+                                  isPlaceholder: _brand == null,
+                                  onTap: _pickBrand,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _FieldLabel('Price (₹)', palette: p),
+                                const SizedBox(height: 7),
+                                _FieldBox(
+                                  palette: p,
+                                  child: TextField(
+                                    controller: _priceCtrl,
+                                    keyboardType: TextInputType.number,
+                                    style: _fieldStyle(p),
+                                    decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _FieldLabel('Stock Qty', palette: p),
+                                const SizedBox(height: 7),
+                                _FieldBox(
+                                  palette: p,
+                                  child: TextField(
+                                    controller: _stockCtrl,
+                                    keyboardType: TextInputType.number,
+                                    style: _fieldStyle(p),
+                                    decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      _FieldLabel('SKU / IMEI', palette: p),
+                      const SizedBox(height: 7),
+                      _FieldBox(
+                        palette: p,
+                        child: TextField(
+                          controller: _skuCtrl,
+                          style: _fieldStyle(p),
+                          decoration: InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            hintText: 'Scan or enter IMEI number',
+                            hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _FieldLabel('Condition', palette: p),
+                      const SizedBox(height: 7),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFEFEF),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            _ConditionSegment(
+                              label: 'New',
+                              selected: _condition == _Condition.new_,
+                              onTap: () => setState(() => _condition = _Condition.new_),
+                            ),
+                            _ConditionSegment(
+                              label: 'Refurbished',
+                              selected: _condition == _Condition.refurb,
+                              onTap: () => setState(() => _condition = _Condition.refurb),
+                            ),
+                            _ConditionSegment(
+                              label: 'Used',
+                              selected: _condition == _Condition.used,
+                              onTap: () => setState(() => _condition = _Condition.used),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _FieldLabel('Description', palette: p),
+                      const SizedBox(height: 7),
+                      Container(
+                        constraints: const BoxConstraints(minHeight: 80),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: p.card,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: p.border),
+                        ),
+                        child: TextField(
+                          controller: _descCtrl,
+                          maxLines: null,
+                          style: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
+                          decoration: const InputDecoration(border: InputBorder.none, isDense: true),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+                  decoration: BoxDecoration(
+                    color: p.card,
+                    border: Border(top: BorderSide(color: p.border)),
+                  ),
+                  child: GestureDetector(
+                    onTap: state.isSubmitting ? null : () => _save(context),
+                    child: Container(
+                      height: 52,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.accent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: state.isSubmitting
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2.2, valueColor: AlwaysStoppedAnimation(Colors.white)),
+                            )
+                          : const Text(
+                              'Save Product',
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                            ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
 TextStyle _fieldStyle(AppPalette p) => TextStyle(fontSize: 14, color: p.textPrimary);
-
-void _comingSoon(BuildContext context, String label) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('$label — coming soon')),
-  );
-}
 
 class _FieldLabel extends StatelessWidget {
   final String text;
@@ -340,8 +425,14 @@ class _FieldBox extends StatelessWidget {
 class _SelectRow extends StatelessWidget {
   final AppPalette palette;
   final String value;
+  final bool isPlaceholder;
   final VoidCallback onTap;
-  const _SelectRow({required this.palette, required this.value, required this.onTap});
+  const _SelectRow({
+    required this.palette,
+    required this.value,
+    required this.onTap,
+    this.isPlaceholder = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -358,7 +449,13 @@ class _SelectRow extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(value, style: TextStyle(fontSize: 14, color: palette.textPrimary)),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                color: isPlaceholder ? const Color(0xFF9C9CA6) : palette.textPrimary,
+              ),
+            ),
             const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9C9CA6)),
           ],
         ),
