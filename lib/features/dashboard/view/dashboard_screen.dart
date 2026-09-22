@@ -17,12 +17,12 @@ final _timeFormat = DateFormat('h:mm a');
 /// Dashboard — matches the CellPoint design canvas (stat grid, quick
 /// actions, recent sales, service queue).
 ///
-/// "Recent sales" is real, live Firestore data as of 2026-09-22 (via
-/// SalesHistoryBloc → SaleRepository.watchSales() — the same bloc/
-/// repository method Sales History uses, just showing the first 2).
-/// Everything else on this screen (the stat grid, service queue) is
-/// still the same static reference data the design canvas uses — see
-/// the "Async data flow in Bloc" R&D topic for wiring those up too.
+/// "Recent sales", "Today's Sales" and "Orders Today" are all real,
+/// live Firestore data as of 2026-09-22 (via SalesHistoryBloc →
+/// SaleRepository.watchSales() — the same bloc/repository method Sales
+/// History uses). "Repairs Active", "Low Stock" and the service queue
+/// are still the same static reference data the design canvas uses —
+/// see the "Async data flow in Bloc" R&D topic for wiring those up too.
 ///
 /// Theme-aware via [AppPalette] (background/card/border/text colors
 /// swap with light/dark). The accent-colored "Today's Sales" card and
@@ -362,7 +362,9 @@ class _StatGrid extends StatelessWidget {
           trend: 'Needs reorder',
           trendColor: AppColors.warningText,
         ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
@@ -377,6 +379,7 @@ class _StatCard extends StatelessWidget {
   final String trend;
   final Color trendColor;
   final bool showTrendIcon;
+  final IconData trendIcon;
 
   const _StatCard({
     required this.label,
@@ -388,6 +391,7 @@ class _StatCard extends StatelessWidget {
     required this.trend,
     required this.trendColor,
     this.showTrendIcon = false,
+    this.trendIcon = Icons.trending_up_rounded,
   });
 
   @override
@@ -408,7 +412,7 @@ class _StatCard extends StatelessWidget {
           Row(
             children: [
               if (showTrendIcon) ...[
-                Icon(Icons.trending_up_rounded, size: 13, color: trendColor),
+                Icon(trendIcon, size: 13, color: trendColor),
                 const SizedBox(width: 4),
               ],
               Flexible(
