@@ -1,16 +1,30 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/models/app_user.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../chat/view/chat_list_screen.dart';
+import '../../chat/view/conversation_screen.dart';
 import '../../theme/bloc/theme_bloc.dart';
 import '../../theme/bloc/theme_event.dart';
 import '../../theme/bloc/theme_state.dart';
+import '../bloc/current_user_bloc.dart';
+import '../bloc/current_user_event.dart';
+import '../bloc/current_user_state.dart';
 
 /// Profile — matches the CellPoint design canvas (account card, three
 /// grouped settings sections, Log Out).
+///
+/// As of 2026-09-22, this screen shows the **real signed-in person**
+/// (owner or a specific employee), not fixed placeholder text — see
+/// `CurrentUserBloc`/`CurrentUserRepository`. That's also what decides
+/// which menu rows show: only the owner sees Staff Management and the
+/// full Team Chat list; an employee sees a single "Chat with Owner"
+/// row instead.
 ///
 /// Dark Mode is real: the switch below reads/dispatches to the
 /// app-wide `ThemeBloc` (see app.dart), so toggling it here flips
@@ -23,14 +37,26 @@ import '../../theme/bloc/theme_state.dart';
 /// notifications system exists yet. Menu rows with no real destination
 /// yet reuse the same "coming soon" SnackBar pattern as the login
 /// screen's Forgot password/Create account.
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => CurrentUserBloc()..add(const CurrentUserRequested()),
+      child: const _ProfileView(),
+    );
+  }
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileView extends StatefulWidget {
+  const _ProfileView();
+
+  @override
+  State<_ProfileView> createState() => _ProfileViewState();
+}
+
+class _ProfileViewState extends State<_ProfileView> {
   bool _notifOn = true;
 
   void _comingSoon(String feature) {
@@ -39,10 +65,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ..showSnackBar(SnackBar(content: Text('$feature — coming soon')));
   }
 
+  Future<void> _logOut() async {
+    // Actually end the Firebase session (previously this just navigated
+    // to Login without signing out — harmless day-to-day since signing
+    // in again overwrites the session, but not correct logout hygiene).
+    await FirebaseAuth.instance.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
+  }
+
+  String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
     final darkOn = context.watch<ThemeBloc>().state.isDark;
+    final userState = context.watch<CurrentUserBloc>().state;
+    final AppUser? user = userState.user;
+
+    final displayName = user?.displayName ?? '...';
+    final roleLabel = user == null ? '' : (user.isOwner ? 'Shop Owner · 4B Mobiles' : 'Staff · 4B Mobiles');
 
     return Scaffold(
       backgroundColor: p.background,
@@ -95,9 +142,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               height: 56,
                               decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
                               alignment: Alignment.center,
-                              child: const Text(
-                                'AM',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+                              child: Text(
+                                _initials(displayName),
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
                               ),
                             ),
                             const SizedBox(width: 14),
@@ -105,10 +152,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Arjun Mehta', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: p.textPrimary)),
+                                  Text(displayName, style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: p.textPrimary)),
                                   const SizedBox(height: 3),
                                   Text(
-                                    'Shop Owner · 4B Mobiles',
+                                    roleLabel,
                                     style: TextStyle(fontSize: 12.5, color: p.textSecondary, fontWeight: FontWeight.w500),
                                   ),
                                 ],
@@ -126,7 +173,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       rows: [
                         _MenuRowData(icon: Icons.person_outline, label: 'Edit Profile', onTap: () => _comingSoon('Edit Profile')),
                         _MenuRowData(icon: Icons.storefront_outlined, label: 'Shop Details', onTap: () => _comingSoon('Shop Details')),
-                        _MenuRowData(icon: Icons.groups_outlined, label: 'Staff Management', onTap: () => _comingSoon('Staff Management')),
+                        // Only the owner manages staff — an employee
+                        // account has no reason to see this row.
+                        if (user == null || user.isOwner)
+                          _MenuRowData(
+                            icon: Icons.groups_outlined,
+                            label: 'Staff Management',
+                            onTap: () => Navigator.of(context).pushNamed(AppRoutes.staffManagement),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -141,6 +195,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         _MenuRowData(icon: Icons.credit_card_outlined, label: 'Payment Settings', onTap: () => _comingSoon('Payment Settings')),
                         _MenuRowData(icon: Icons.receipt_long_outlined, label: 'Tax & Invoice Settings', onTap: () => _comingSoon('Tax & Invoice Settings')),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    // Chat — owner sees every employee's conversation,
+                    // an employee sees just their own thread with the
+                    // owner (skips the list entirely, since there's
+                    // only ever one person on the other end for them).
+                    _MenuSection(
+                      palette: p,
+                      title: 'TEAM',
+                      rows: [
+                        if (user != null && user.isOwner)
+                          _MenuRowData(
+                            icon: Icons.chat_bubble_outline_rounded,
+                            label: 'Team Chat',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => ChatListScreen(currentUser: user)),
+                            ),
+                          ),
+                        if (user != null && !user.isOwner)
+                          _MenuRowData(
+                            icon: Icons.chat_bubble_outline_rounded,
+                            label: 'Chat with Owner',
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => ConversationScreen(
+                                  conversationId: user.uid,
+                                  title: '4B Mobiles Owner',
+                                  currentUser: user,
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (user == null)
+                          _MenuRowData(icon: Icons.chat_bubble_outline_rounded, label: 'Chat', onTap: () => _comingSoon('Chat')),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -196,7 +285,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 20),
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false),
+                      onTap: _logOut,
                       child: Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
@@ -242,6 +331,7 @@ class _MenuSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (rows.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -80,9 +80,27 @@ class _SalesViewState extends State<_SalesView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'New Sale',
-                          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: p.textPrimary),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'New Sale',
+                              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: p.textPrimary),
+                            ),
+                            GestureDetector(
+                              onTap: () => Navigator.of(context).pushNamed(AppRoutes.salesHistory),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: p.card,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: p.border),
+                                ),
+                                child: Icon(Icons.history_rounded, size: 19, color: p.textPrimary),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 14),
                         Container(

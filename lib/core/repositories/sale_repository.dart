@@ -28,6 +28,23 @@ class SaleRepository {
   CollectionReference<Map<String, dynamic>> get _sales => _db.collection('sales');
   CollectionReference<Map<String, dynamic>> get _products => _db.collection('products');
 
+  /// Live feed of every completed sale for this shop, newest first.
+  /// Client-sorted (like ProductRepository.watchProducts and
+  /// EmployeeRepository.watchEmployees) rather than an .orderBy() on
+  /// Firestore, so this doesn't need a composite index alongside the
+  /// .where('shopId', ...) filter.
+  Stream<List<Sale>> watchSales({required String shopId}) {
+    return _sales.where('shopId', isEqualTo: shopId).snapshots().map((snapshot) {
+      final sales = snapshot.docs.map((doc) => Sale.fromMap(doc.id, doc.data())).toList();
+      sales.sort((a, b) {
+        final aTime = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bTime.compareTo(aTime); // newest first
+      });
+      return sales;
+    });
+  }
+
   Future<void> completeSale(Sale sale) {
     return _db.runTransaction((txn) async {
       // Firestore transactions require every read to finish before any

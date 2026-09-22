@@ -195,7 +195,13 @@ class _LoginViewState extends State<_LoginView> {
   }
 }
 
-class _LabeledField extends StatelessWidget {
+/// A password field (`obscureText: true`) grows a show/hide eye button
+/// on the right — that needs its own `_obscured` state that flips
+/// independently of `obscureText` (which just sets the *starting*
+/// hidden state), so this is a StatefulWidget rather than the plain
+/// stateless field it started as. A non-password field (Username)
+/// asked for no toggle, so it gets no suffix icon at all.
+class _LabeledField extends StatefulWidget {
   final AppPalette palette;
   final String label;
   final TextEditingController controller;
@@ -217,25 +223,52 @@ class _LabeledField extends StatelessWidget {
   });
 
   @override
+  State<_LabeledField> createState() => _LabeledFieldState();
+}
+
+class _LabeledFieldState extends State<_LabeledField> {
+  bool _obscured = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _obscured = widget.obscureText;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final palette = widget.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: palette.textPrimary)),
+        Text(widget.label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: palette.textPrimary)),
         const SizedBox(height: 7),
         TextField(
-          controller: controller,
-          obscureText: obscureText,
-          keyboardType: keyboardType,
-          maxLength: maxLength,
+          controller: widget.controller,
+          obscureText: _obscured,
+          keyboardType: widget.keyboardType,
+          maxLength: widget.maxLength,
           style: TextStyle(color: palette.textPrimary),
           decoration: InputDecoration(
             filled: true,
             fillColor: palette.inputFill,
-            hintText: hintText,
+            hintText: widget.hintText,
             hintStyle: TextStyle(color: palette.textSecondary, fontSize: 14),
-            prefixIcon: icon == null ? null : Icon(icon, size: 18, color: palette.textSecondary),
+            prefixIcon: widget.icon == null ? null : Icon(widget.icon, size: 18, color: palette.textSecondary),
             prefixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 20),
+            // Only a password-style field grows the eye toggle — a
+            // plain field (Username) was never asked to hide/show.
+            suffixIcon: widget.obscureText
+                ? GestureDetector(
+                    onTap: () => setState(() => _obscured = !_obscured),
+                    child: Icon(
+                      _obscured ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      size: 18,
+                      color: palette.textSecondary,
+                    ),
+                  )
+                : null,
+            suffixIconConstraints: const BoxConstraints(minWidth: 42, minHeight: 20),
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             // maxLength defaults to showing a "n/10" counter under the
             // field — fine for the mobile number field, but this hides

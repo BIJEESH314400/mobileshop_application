@@ -1,15 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/models/sale.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../sales/bloc/sales_history_bloc.dart';
+import '../../sales/bloc/sales_history_event.dart';
+import '../../sales/bloc/sales_history_state.dart';
+
+final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+final _timeFormat = DateFormat('h:mm a');
 
 /// Dashboard — matches the CellPoint design canvas (stat grid, quick
-/// actions, recent sales, service queue). Purely visual for now: all
-/// the numbers below are the same static reference data the design
-/// itself uses. Wiring this to real data is a DashboardBloc/Repository
-/// job for later — see the "Async data flow in Bloc" R&D topic.
+/// actions, recent sales, service queue).
+///
+/// "Recent sales" is real, live Firestore data as of 2026-09-22 (via
+/// SalesHistoryBloc → SaleRepository.watchSales() — the same bloc/
+/// repository method Sales History uses, just showing the first 2).
+/// Everything else on this screen (the stat grid, service queue) is
+/// still the same static reference data the design canvas uses — see
+/// the "Async data flow in Bloc" R&D topic for wiring those up too.
 ///
 /// Theme-aware via [AppPalette] (background/card/border/text colors
 /// swap with light/dark). The accent-colored "Today's Sales" card and
@@ -22,81 +35,135 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    return Scaffold(
-      backgroundColor: p.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _Header(palette: p),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _StatGrid(palette: p),
-                    const SizedBox(height: 22),
-                    _QuickActions(palette: p),
-                    const SizedBox(height: 22),
-                    _SectionList(
-                      palette: p,
-                      title: 'Recent sales',
-                      viewAllRoute: AppRoutes.sales,
-                      rows: const [
-                        _ListRowData(
-                          icon: Icons.smartphone_rounded,
-                          iconBg: Color(0xFFF4F4FE),
-                          iconColor: AppColors.accent,
-                          title: 'iPhone 14 · 128GB',
-                          subtitle: 'Rohan Kapoor · 10:24 AM',
-                          trailing: '₹68,999',
-                        ),
-                        _ListRowData(
-                          icon: Icons.shopping_bag_outlined,
-                          iconBg: Color(0xFFF4F4FE),
-                          iconColor: AppColors.accent,
-                          title: 'Silicone Case + Glass',
-                          subtitle: 'Neha Sharma · 9:52 AM',
-                          trailing: '₹899',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    _SectionList(
-                      palette: p,
-                      title: 'Service queue',
-                      viewAllRoute: AppRoutes.service,
-                      rows: const [
-                        _ListRowData(
-                          icon: Icons.bolt_rounded,
-                          iconBg: AppColors.warningBg,
-                          iconColor: AppColors.warningText,
-                          title: 'Screen replacement',
-                          subtitle: 'OnePlus Nord · Priya M.',
-                          badgeLabel: 'In Progress',
-                          badgeColor: AppColors.warningText,
-                          badgeBg: AppColors.warningBg,
-                        ),
-                        _ListRowData(
-                          icon: Icons.bolt_rounded,
-                          iconBg: AppColors.successBg,
-                          iconColor: AppColors.success,
-                          title: 'Battery replacement',
-                          subtitle: 'iPhone 12 · Aman G.',
-                          badgeLabel: 'Ready',
-                          badgeColor: AppColors.success,
-                          badgeBg: AppColors.successBg,
-                        ),
-                      ],
-                    ),
-                  ],
+    return BlocProvider(
+      create: (_) => SalesHistoryBloc()..add(const SalesHistorySubscriptionRequested()),
+      child: Scaffold(
+        backgroundColor: p.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              _Header(palette: p),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _StatGrid(palette: p),
+                      const SizedBox(height: 22),
+                      _QuickActions(palette: p),
+                      const SizedBox(height: 22),
+                      _RecentSalesSection(palette: p),
+                      const SizedBox(height: 22),
+                      _SectionList(
+                        palette: p,
+                        title: 'Service queue',
+                        viewAllRoute: AppRoutes.service,
+                        rows: const [
+                          _ListRowData(
+                            icon: Icons.bolt_rounded,
+                            iconBg: AppColors.warningBg,
+                            iconColor: AppColors.warningText,
+                            title: 'Screen replacement',
+                            subtitle: 'OnePlus Nord · Priya M.',
+                            badgeLabel: 'In Progress',
+                            badgeColor: AppColors.warningText,
+                            badgeBg: AppColors.warningBg,
+                          ),
+                          _ListRowData(
+                            icon: Icons.bolt_rounded,
+                            iconBg: AppColors.successBg,
+                            iconColor: AppColors.success,
+                            title: 'Battery replacement',
+                            subtitle: 'iPhone 12 · Aman G.',
+                            badgeLabel: 'Ready',
+                            badgeColor: AppColors.success,
+                            badgeBg: AppColors.successBg,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
+        bottomNavigationBar: const AppBottomNav(current: AppTab.dashboard),
       ),
-      bottomNavigationBar: const AppBottomNav(current: AppTab.dashboard),
+    );
+  }
+}
+
+/// Real "Recent sales" — the 2 most recent completed sales for this
+/// shop, live via SalesHistoryBloc. Falls back to a plain message
+/// while loading or once it's confirmed there are no sales yet,
+/// instead of ever showing made-up names/amounts.
+class _RecentSalesSection extends StatelessWidget {
+  final AppPalette palette;
+
+  const _RecentSalesSection({required this.palette});
+
+  IconData _paymentIcon(String method) {
+    switch (method) {
+      case 'upi':
+        return Icons.qr_code_rounded;
+      case 'card':
+        return Icons.credit_card_rounded;
+      default:
+        return Icons.currency_rupee_rounded;
+    }
+  }
+
+  String _itemSummary(Sale sale) {
+    if (sale.items.isEmpty) return 'No items';
+    final first = sale.items.first;
+    final firstLabel = '${first.name} ×${first.qty}';
+    if (sale.items.length == 1) return firstLabel;
+    return '$firstLabel + ${sale.items.length - 1} more';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<SalesHistoryBloc, SalesHistoryState>(
+      builder: (context, state) {
+        if (state.isLoading && state.sales.isEmpty) {
+          return _SectionList(palette: palette, title: 'Recent sales', viewAllRoute: AppRoutes.salesHistory, rows: const []);
+        }
+
+        if (state.sales.isEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Recent sales', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: palette.textPrimary)),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: palette.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: palette.border),
+                ),
+                child: Text('No sales yet', style: TextStyle(fontSize: 13, color: palette.textSecondary)),
+              ),
+            ],
+          );
+        }
+
+        final rows = state.sales.take(2).map((sale) {
+          return _ListRowData(
+            icon: _paymentIcon(sale.paymentMethod),
+            iconBg: AppColors.iconTint,
+            iconColor: AppColors.accent,
+            title: _itemSummary(sale),
+            subtitle: sale.createdAt == null ? 'Just now' : _timeFormat.format(sale.createdAt!),
+            trailing: _priceFormat.format(sale.total),
+          );
+        }).toList();
+
+        return _SectionList(palette: palette, title: 'Recent sales', viewAllRoute: AppRoutes.salesHistory, rows: rows);
+      },
     );
   }
 }
@@ -187,6 +254,14 @@ class _IconButton extends StatelessWidget {
   }
 }
 
+bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// Today's Sales + Orders Today, computed live from the same
+/// SalesHistoryBloc stream Recent Sales uses (SaleRepository.watchSales()
+/// — every sale for this shop, so "today"/"yesterday" are worked out
+/// here by comparing each sale's createdAt to the device's current
+/// date). Repairs Active / Low Stock are still static — no Service/
+/// Products live-count wiring exists yet for those.
 class _StatGrid extends StatelessWidget {
   final AppPalette palette;
 
@@ -194,45 +269,91 @@ class _StatGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.5,
-      children: [
-        const _StatCard(
-          label: "Today's Sales",
-          value: '₹42,500',
-          labelColor: Colors.white70,
-          valueColor: Colors.white,
-          background: AppColors.accent,
-          trend: '12% vs yesterday',
-          trendColor: Color(0xFFB9F5CE),
-          showTrendIcon: true,
-        ),
-        _StatCard(
-          label: 'Orders Today',
-          value: '18',
-          labelColor: palette.textSecondary,
-          valueColor: palette.textPrimary,
-          background: palette.card,
-          border: palette.border,
-          trend: '4 pending pickup',
-          trendColor: palette.textSecondary,
-        ),
-        _StatCard(
-          label: 'Repairs Active',
-          value: '5',
-          labelColor: palette.textSecondary,
-          valueColor: palette.textPrimary,
-          background: palette.card,
-          border: palette.border,
-          trend: '2 ready for pickup',
-          trendColor: palette.textSecondary,
-        ),
-        const _StatCard(
+    return BlocBuilder<SalesHistoryBloc, SalesHistoryState>(
+      builder: (context, state) {
+        final now = DateTime.now();
+        final yesterday = now.subtract(const Duration(days: 1));
+
+        double todayTotal = 0;
+        double yesterdayTotal = 0;
+        var ordersToday = 0;
+        var ordersYesterday = 0;
+
+        for (final sale in state.sales) {
+          final at = sale.createdAt ?? now; // a just-written sale may not have its server timestamp back yet
+          if (_isSameDay(at, now)) {
+            todayTotal += sale.total;
+            ordersToday++;
+          } else if (_isSameDay(at, yesterday)) {
+            yesterdayTotal += sale.total;
+            ordersYesterday++;
+          }
+        }
+
+        String salesTrend;
+        Color salesTrendColor = const Color(0xFFB9F5CE);
+        var showSalesTrendIcon = true;
+        IconData salesTrendIcon = Icons.trending_up_rounded;
+        if (yesterdayTotal <= 0) {
+          showSalesTrendIcon = false;
+          salesTrend = todayTotal > 0 ? 'No sales yesterday to compare' : 'No sales yet today';
+        } else {
+          final changePct = ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).round();
+          if (changePct < 0) salesTrendColor = const Color(0xFFFFC9C9);
+          salesTrendIcon = changePct < 0 ? Icons.trending_down_rounded : Icons.trending_up_rounded;
+          salesTrend = '${changePct >= 0 ? '+' : ''}$changePct% vs yesterday';
+        }
+
+        String ordersTrend;
+        if (ordersYesterday == 0 && ordersToday == 0) {
+          ordersTrend = 'No orders yet today';
+        } else {
+          final diff = ordersToday - ordersYesterday;
+          ordersTrend = diff == 0
+              ? 'Same as yesterday'
+              : '${diff > 0 ? '+' : ''}$diff vs yesterday';
+        }
+
+        return GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 2,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 1.5,
+          children: [
+            _StatCard(
+              label: "Today's Sales",
+              value: _priceFormat.format(todayTotal),
+              labelColor: Colors.white70,
+              valueColor: Colors.white,
+              background: AppColors.accent,
+              trend: salesTrend,
+              trendColor: salesTrendColor,
+              showTrendIcon: showSalesTrendIcon,
+              trendIcon: salesTrendIcon,
+            ),
+            _StatCard(
+              label: 'Orders Today',
+              value: '$ordersToday',
+              labelColor: palette.textSecondary,
+              valueColor: palette.textPrimary,
+              background: palette.card,
+              border: palette.border,
+              trend: ordersTrend,
+              trendColor: palette.textSecondary,
+            ),
+            _StatCard(
+              label: 'Repairs Active',
+              value: '5',
+              labelColor: palette.textSecondary,
+              valueColor: palette.textPrimary,
+              background: palette.card,
+              border: palette.border,
+              trend: '2 ready for pickup',
+              trendColor: palette.textSecondary,
+            ),
+            const _StatCard(
           label: 'Low Stock',
           value: '3 items',
           labelColor: AppColors.warningText,
@@ -449,6 +570,17 @@ class _SectionList extends StatelessWidget {
           ),
           child: Column(
             children: [
+              if (rows.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: palette.textSecondary),
+                    ),
+                  ),
+                ),
               for (var i = 0; i < rows.length; i++)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
