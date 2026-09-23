@@ -7,6 +7,11 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../chat/bloc/unread_summary_bloc.dart';
+import '../../chat/bloc/unread_summary_event.dart';
+import '../../chat/bloc/unread_summary_state.dart';
+import '../../chat/view/conversation_screen.dart';
+import 'notifications_screen.dart';
 import '../../sales/bloc/sales_history_bloc.dart';
 import '../../sales/bloc/sales_history_event.dart';
 import '../../sales/bloc/sales_history_state.dart';
@@ -35,8 +40,11 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    return BlocProvider(
-      create: (_) => SalesHistoryBloc()..add(const SalesHistorySubscriptionRequested()),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(create: (_) => SalesHistoryBloc()..add(const SalesHistorySubscriptionRequested())),
+        BlocProvider(create: (_) => UnreadSummaryBloc()..add(const UnreadSummarySubscriptionRequested())),
+      ],
       child: Scaffold(
         backgroundColor: p.background,
         body: SafeArea(
@@ -199,12 +207,35 @@ class _Header extends StatelessWidget {
             children: [
               _IconButton(palette: palette, icon: Icons.search_rounded, onTap: () {}),
               const SizedBox(width: 10),
-              _IconButton(palette: palette, icon: Icons.notifications_outlined, onTap: () {}, showDot: true),
+              BlocBuilder<UnreadSummaryBloc, UnreadSummaryState>(
+                builder: (context, state) {
+                  return _IconButton(
+                    palette: palette,
+                    icon: Icons.notifications_outlined,
+                    showDot: state.hasUnread,
+                    onTap: () => _openNotifications(context),
+                  );
+                },
+              ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  // Pushes the dedicated Notifications page, re-providing this
+  // screen's UnreadSummaryBloc instance -- Navigator.push's route sits
+  // outside this screen's own BlocProvider in the widget tree, same
+  // reason the old bottom sheet needed BlocProvider.value.
+  void _openNotifications(BuildContext context) {
+    final bloc = context.read<UnreadSummaryBloc>();
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => BlocProvider.value(
+        value: bloc,
+        child: NotificationsScreen(currentUser: bloc.state.currentUser),
+      ),
+    ));
   }
 }
 

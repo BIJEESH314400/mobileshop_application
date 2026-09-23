@@ -119,6 +119,9 @@ class _ConversationRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasUnread = conversation.unreadForOwner;
+    // ChatListScreen is owner-only, so the "other side" for every row
+    // here is that row's employee.
+    final isTyping = conversation.typingEmployee;
     final preview = conversation.lastMessage.isEmpty ? 'No messages yet' : conversation.lastMessage;
     final time = conversation.lastMessageAt == null ? '' : DateFormat('h:mm a').format(conversation.lastMessageAt!);
 
@@ -148,13 +151,17 @@ class _ConversationRow extends StatelessWidget {
                   Text(conversation.employeeName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: palette.textPrimary)),
                   const SizedBox(height: 2),
                   Text(
-                    preview,
+                    // While the employee is typing, this replaces the
+                    // last-message preview entirely -- same as WhatsApp's
+                    // conversation list.
+                    isTyping ? 'typing...' : preview,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 12.5,
-                      color: hasUnread ? palette.textPrimary : palette.textSecondary,
-                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w400,
+                      color: isTyping ? AppColors.accent : (hasUnread ? palette.textPrimary : palette.textSecondary),
+                      fontWeight: isTyping || hasUnread ? FontWeight.w600 : FontWeight.w400,
+                      fontStyle: isTyping ? FontStyle.italic : FontStyle.normal,
                     ),
                   ),
                 ],

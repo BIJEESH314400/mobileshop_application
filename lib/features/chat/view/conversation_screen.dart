@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/models/app_user.dart';
 import '../../../core/models/chat_message.dart';
+import '../../../core/services/active_conversation_tracker.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../bloc/conversation_bloc.dart';
@@ -31,7 +34,8 @@ class ConversationScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => ConversationBloc(conversationId: conversationId, currentUser: currentUser)
-        ..add(const ConversationSubscriptionRequested()),
+        ..add(const ConversationSubscriptionRequested())
+        ..add(const ConversationTypingSubscriptionRequested()),
       child: _ConversationView(title: title, currentUser: currentUser),
     );
   }
@@ -49,17 +53,62 @@ class _ConversationView extends StatefulWidget {
 class _ConversationViewState extends State<_ConversationView> {
   final _textCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
+  Timer? _typingIdleTimer;
+  bool _lastSentTyping = false;
+  late final String _conversationId;
+
+  @override
+  void initState() {
+    super.initState();
+    _conversationId = context.read<ConversationBloc>().conversationId;
+    // This chat is now the one on screen -- ChatNotificationWatcher
+    // checks this before popping a notification, so a message that
+    // arrives while it's already open here doesn't also buzz as one.
+    ActiveConversationTracker.openConversationId = _conversationId;
+  }
 
   @override
   void dispose() {
+    // Only clear it if it's still pointing at *this* screen -- guards
+    // against a stale clear if somehow a second conversation screen
+    // was opened before this one finished disposing.
+    if (ActiveConversationTracker.openConversationId == _conversationId) {
+      ActiveConversationTracker.openConversationId = null;
+    }
+    _typingIdleTimer?.cancel();
+    // Best-effort: let the other side know this side left mid-typing.
+    if (_lastSentTyping) {
+      context.read<ConversationBloc>().add(const ConversationTypingChanged(false));
+    }
     _textCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
 
+  // Called on every keystroke. Debounced so it doesn't write to
+  // Firestore on every character -- only when typing *starts*, and
+  // again after ~3s of no further keystrokes to say it *stopped*.
+  void _onTextChanged(String text) {
+    _typingIdleTimer?.cancel();
+    if (text.trim().isEmpty) {
+      _setTyping(false);
+      return;
+    }
+    _setTyping(true);
+    _typingIdleTimer = Timer(const Duration(seconds: 3), () => _setTyping(false));
+  }
+
+  void _setTyping(bool typing) {
+    if (_lastSentTyping == typing) return;
+    _lastSentTyping = typing;
+    context.read<ConversationBloc>().add(ConversationTypingChanged(typing));
+  }
+
   void _send(BuildContext context) {
     final text = _textCtrl.text;
     if (text.trim().isEmpty) return;
+    _typingIdleTimer?.cancel();
+    _setTyping(false);
     context.read<ConversationBloc>().add(ConversationMessageSent(text));
     _textCtrl.clear();
   }
@@ -92,7 +141,19 @@ class _ConversationViewState extends State<_ConversationView> {
                           child: const Icon(Icons.person_rounded, size: 16, color: AppColors.accent),
                         ),
                         const SizedBox(width: 10),
-                        Text(widget.title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.textPrimary)),
+                        BlocBuilder<ConversationBloc, ConversationState>(
+                          buildWhen: (previous, current) => previous.otherIsTyping != current.otherIsTyping,
+                          builder: (context, state) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(widget.title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.textPrimary)),
+                                if (state.otherIsTyping)
+                                  Text('Typing...', style: TextStyle(fontSize: 12, color: AppColors.accent, fontWeight: FontWeight.w600)),
+                              ],
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -119,7 +180,7 @@ class _ConversationViewState extends State<_ConversationView> {
                   if (state.isLoading && state.messages.isEmpty) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  if (state.messages.isEmpty) {
+                  if (state.messages.isEmpty && !state.otherIsTyping) {
                     return Center(
                       child: Text(
                         'No messages yet.\nSay hello!',
@@ -129,13 +190,22 @@ class _ConversationViewState extends State<_ConversationView> {
                     );
                   }
                   final reversed = state.messages.reversed.toList();
+                  // The animated typing bubble is inserted as the newest
+                  // item (index 0 in this reversed, bottom-anchored list)
+                  // whenever the other side is typing -- same idea as
+                  // WhatsApp's "..." bubble at the foot of the thread.
+                  final showTypingBubble = state.otherIsTyping;
+                  final itemCount = reversed.length + (showTypingBubble ? 1 : 0);
                   return ListView.builder(
                     controller: _scrollCtrl,
                     reverse: true,
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    itemCount: reversed.length,
+                    itemCount: itemCount,
                     itemBuilder: (context, index) {
-                      final m = reversed[index];
+                      if (showTypingBubble && index == 0) {
+                        return _TypingBubble(palette: p);
+                      }
+                      final m = reversed[showTypingBubble ? index - 1 : index];
                       final isMine = m.senderId == widget.currentUser.uid;
                       return _MessageBubble(message: m, isMine: isMine, palette: p);
                     },
@@ -169,6 +239,7 @@ class _ConversationViewState extends State<_ConversationView> {
                           hintText: 'Type a message...',
                           hintStyle: TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
                         ),
+                        onChanged: _onTextChanged,
                         onSubmitted: (_) => _send(context),
                       ),
                     ),
@@ -188,6 +259,77 @@ class _ConversationViewState extends State<_ConversationView> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The animated "..." bubble shown in place of a message while the
+/// other person is typing -- same left-aligned bordered-card shape as
+/// an incoming _MessageBubble, but with 3 pulsing dots instead of text.
+class _TypingBubble extends StatefulWidget {
+  final AppPalette palette;
+  const _TypingBubble({required this.palette});
+
+  @override
+  State<_TypingBubble> createState() => _TypingBubbleState();
+}
+
+class _TypingBubbleState extends State<_TypingBubble> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: widget.palette.card,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(14),
+            topRight: Radius.circular(14),
+            bottomLeft: Radius.circular(4),
+            bottomRight: Radius.circular(14),
+          ),
+          border: Border.all(color: widget.palette.border),
+        ),
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(3, (i) {
+                // Each dot's phase is offset from the next so they pulse
+                // in a left-to-right wave rather than all together.
+                final t = (_controller.value - (i * 0.2)) % 1.0;
+                final bounce = t < 0.5 ? t * 2 : (1 - t) * 2;
+                return Container(
+                  margin: EdgeInsets.only(right: i == 2 ? 0 : 4),
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.accent.withOpacity(0.3 + bounce * 0.7),
+                  ),
+                );
+              }),
+            );
+          },
         ),
       ),
     );

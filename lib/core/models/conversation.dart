@@ -17,6 +17,15 @@ class Conversation extends Equatable {
   final String? lastSenderRole; // 'owner' | 'employee' | null (no messages yet)
   final bool unreadForOwner;
   final bool unreadForEmployee;
+  // How many unread messages are waiting on each side -- added
+  // alongside the existing unreadForOwner/unreadForEmployee bools
+  // (kept as-is, they still drive the Team Chat list's dot/bold
+  // text) so the Dashboard notification bell can show a real
+  // per-employee breakdown instead of just "something's unread".
+  final int unreadCountOwner;
+  final int unreadCountEmployee;
+  final bool typingOwner;
+  final bool typingEmployee;
 
   const Conversation({
     required this.employeeUid,
@@ -28,6 +37,10 @@ class Conversation extends Equatable {
     this.lastSenderRole,
     this.unreadForOwner = false,
     this.unreadForEmployee = false,
+    this.unreadCountOwner = 0,
+    this.unreadCountEmployee = 0,
+    this.typingOwner = false,
+    this.typingEmployee = false,
   });
 
   factory Conversation.fromMap(String id, Map<String, dynamic> map) {
@@ -42,6 +55,10 @@ class Conversation extends Equatable {
       lastSenderRole: map['lastSenderRole'] as String?,
       unreadForOwner: map['unreadForOwner'] as bool? ?? false,
       unreadForEmployee: map['unreadForEmployee'] as bool? ?? false,
+      unreadCountOwner: (map['unreadCountOwner'] as num?)?.toInt() ?? 0,
+      unreadCountEmployee: (map['unreadCountEmployee'] as num?)?.toInt() ?? 0,
+      typingOwner: map['typingOwner'] as bool? ?? false,
+      typingEmployee: map['typingEmployee'] as bool? ?? false,
     );
   }
 
@@ -56,5 +73,9 @@ class Conversation extends Equatable {
         lastSenderRole,
         unreadForOwner,
         unreadForEmployee,
+        unreadCountOwner,
+        unreadCountEmployee,
+        typingOwner,
+        typingEmployee,
       ];
 }

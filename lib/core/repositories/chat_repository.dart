@@ -71,6 +71,13 @@ class ChatRepository {
       // message — only flip the *other* side's flag on.
       if (senderRole == 'owner') 'unreadForEmployee': true,
       if (senderRole == 'employee') 'unreadForOwner': true,
+      // Same idea, but a running count instead of a bool -- this is
+      // what lets the Dashboard notification bell show "how many",
+      // not just "something's there". increment() is safe even if the
+      // field doesn't exist yet -- Firestore treats a missing numeric
+      // field as 0 for increment purposes.
+      if (senderRole == 'owner') 'unreadCountEmployee': FieldValue.increment(1),
+      if (senderRole == 'employee') 'unreadCountOwner': FieldValue.increment(1),
     }, SetOptions(merge: true));
     await batch.commit();
   }
@@ -103,6 +110,34 @@ class ChatRepository {
     return _conversations.doc(conversationId).set({
       if (asRole == 'owner') 'unreadForOwner': false,
       if (asRole == 'employee') 'unreadForEmployee': false,
+      if (asRole == 'owner') 'unreadCountOwner': 0,
+      if (asRole == 'employee') 'unreadCountEmployee': 0,
+    }, SetOptions(merge: true));
+  }
+
+  /// Live view of a single conversation doc — used inside an open chat
+  /// to watch the *other* side's typing flag update in real time.
+  /// Returns null if the doc doesn't exist (shouldn't normally happen,
+  /// since every employee gets one created up front, but a stream
+  /// consumer should still handle it gracefully).
+  Stream<Conversation?> watchConversation(String conversationId) {
+    return _conversations.doc(conversationId).snapshots().map((doc) {
+      final data = doc.data();
+      if (!doc.exists || data == null) return null;
+      return Conversation.fromMap(doc.id, data);
+    });
+  }
+
+  /// Flips this side's typing flag on/off. set(merge:true) so it never
+  /// fails even if the conversation doc is still being self-healed.
+  Future<void> setTyping({
+    required String conversationId,
+    required String asRole,
+    required bool typing,
+  }) {
+    return _conversations.doc(conversationId).set({
+      if (asRole == 'owner') 'typingOwner': typing,
+      if (asRole == 'employee') 'typingEmployee': typing,
     }, SetOptions(merge: true));
   }
 }
