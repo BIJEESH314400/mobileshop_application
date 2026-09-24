@@ -26,7 +26,11 @@ class AddProductBloc extends Bloc<AddProductEvent, AddProductState> {
 
     try {
       final product = Product(
-        id: '', // Firestore assigns the real id when addProduct() runs — never read from here.
+        // Ignored on create (Firestore assigns the real id when
+        // addProduct() runs) and ignored on update too (updateProduct()
+        // takes the id as its own parameter, not from this map) — only
+        // kept here because Product's constructor requires it.
+        id: event.productId ?? '',
         name: event.name.trim(),
         category: event.category,
         brand: event.brand,
@@ -41,7 +45,11 @@ class AddProductBloc extends Bloc<AddProductEvent, AddProductState> {
         createdAt: null, // set server-side — see Product.toMap()
       );
 
-      await _repository.addProduct(product);
+      if (event.productId == null) {
+        await _repository.addProduct(product);
+      } else {
+        await _repository.updateProduct(event.productId!, product);
+      }
       emit(state.copyWith(isSubmitting: false, isSuccess: true));
     } catch (_) {
       emit(state.copyWith(

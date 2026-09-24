@@ -57,6 +57,17 @@ class Sale extends Equatable {
   final String paymentMethod; // 'upi' | 'card' | 'cash'
   final DateTime? createdAt;
 
+  // Who actually rang up this sale -- the owner, or a specific employee.
+  // Snapshotted at sale time (name/role, not just a uid) for the same
+  // reason SaleItem snapshots product name/price: if that employee's
+  // name or account ever changes later, this sale should still show who
+  // it really was at the time, without a second Firestore read to look
+  // them up. soldByUid is kept alongside for anything that ever needs
+  // to link back to the real account (e.g. per-employee sales figures).
+  final String soldByUid;
+  final String soldByName;
+  final String soldByRole; // 'owner' | 'employee'
+
   const Sale({
     required this.id,
     required this.shopId,
@@ -67,6 +78,9 @@ class Sale extends Equatable {
     required this.total,
     required this.paymentMethod,
     this.createdAt,
+    this.soldByUid = '',
+    this.soldByName = '',
+    this.soldByRole = 'owner',
   });
 
   factory Sale.fromMap(String id, Map<String, dynamic> map) {
@@ -84,6 +98,12 @@ class Sale extends Equatable {
       total: (map['total'] as num?)?.toDouble() ?? 0,
       paymentMethod: map['paymentMethod'] as String? ?? 'cash',
       createdAt: rawCreatedAt is Timestamp ? rawCreatedAt.toDate() : null,
+      // Empty/'' for any sale recorded before this field existed --
+      // the UI treats an empty soldByName as "not recorded" rather than
+      // guessing who it might have been.
+      soldByUid: map['soldByUid'] as String? ?? '',
+      soldByName: map['soldByName'] as String? ?? '',
+      soldByRole: map['soldByRole'] as String? ?? 'owner',
     );
   }
 
@@ -100,6 +120,9 @@ class Sale extends Equatable {
       'total': total,
       'paymentMethod': paymentMethod,
       'createdAt': FieldValue.serverTimestamp(),
+      'soldByUid': soldByUid,
+      'soldByName': soldByName,
+      'soldByRole': soldByRole,
     };
   }
 
@@ -114,5 +137,8 @@ class Sale extends Equatable {
         total,
         paymentMethod,
         createdAt,
+        soldByUid,
+        soldByName,
+        soldByRole,
       ];
 }

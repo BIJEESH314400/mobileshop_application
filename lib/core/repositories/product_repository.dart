@@ -41,4 +41,15 @@ class ProductRepository {
   Future<void> addProduct(Product product) {
     return _products.add(product.toMap());
   }
+
+  /// Updates an existing product document in place. Deliberately drops
+  /// `createdAt` from the map first -- `toMap()` stamps it with
+  /// `FieldValue.serverTimestamp()`, which is correct for a brand-new
+  /// product but would silently reset the original creation time (and
+  /// therefore its position in "newest first" lists) every time someone
+  /// just fixes a typo or updates the stock count.
+  Future<void> updateProduct(String id, Product product) {
+    final data = product.toMap()..remove('createdAt');
+    return _products.doc(id).update(data);
+  }
 }

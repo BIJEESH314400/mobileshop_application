@@ -18,6 +18,25 @@ import '../bloc/conversation_state.dart';
 /// always the employee's uid (see the Conversation model's doc
 /// comment), and `title` is whoever the *other* person is, from this
 /// viewer's side.
+bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// "Last seen ..." text from the other side's lastReadAt -- today shows
+/// just the time, yesterday is called out explicitly, anything older
+/// gets a short date. Same relative-date shape as the Dashboard's
+/// today/yesterday stat comparison, reused here for a familiar feel.
+String _lastSeenText(DateTime lastSeen) {
+  final now = DateTime.now();
+  final time = DateFormat('h:mm a').format(lastSeen);
+  if (_isSameDay(lastSeen, now)) {
+    return 'Last seen today at $time';
+  }
+  final yesterday = now.subtract(const Duration(days: 1));
+  if (_isSameDay(lastSeen, yesterday)) {
+    return 'Last seen yesterday at $time';
+  }
+  return 'Last seen ${DateFormat('MMM d').format(lastSeen)} at $time';
+}
+
 class ConversationScreen extends StatelessWidget {
   final String conversationId;
   final String title;
@@ -142,14 +161,32 @@ class _ConversationViewState extends State<_ConversationView> {
                         ),
                         const SizedBox(width: 10),
                         BlocBuilder<ConversationBloc, ConversationState>(
-                          buildWhen: (previous, current) => previous.otherIsTyping != current.otherIsTyping,
+                          buildWhen: (previous, current) =>
+                              previous.otherIsTyping != current.otherIsTyping ||
+                              previous.otherLastReadAt != current.otherLastReadAt,
                           builder: (context, state) {
+                            // Typing beats last-seen when both are true --
+                            // same priority WhatsApp uses. Otherwise, show
+                            // "Last seen ..." from the same lastReadAt used
+                            // for the blue tick (the last time they had this
+                            // chat open) -- nothing at all until they've
+                            // opened it for the first time.
+                            final subtitle = state.otherIsTyping
+                                ? 'Typing...'
+                                : (state.otherLastReadAt == null ? null : _lastSeenText(state.otherLastReadAt!));
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(widget.title, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.textPrimary)),
-                                if (state.otherIsTyping)
-                                  Text('Typing...', style: TextStyle(fontSize: 12, color: AppColors.accent, fontWeight: FontWeight.w600)),
+                                if (subtitle != null)
+                                  Text(
+                                    subtitle,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: state.otherIsTyping ? AppColors.accent : p.textSecondary,
+                                      fontWeight: state.otherIsTyping ? FontWeight.w600 : FontWeight.w400,
+                                    ),
+                                  ),
                               ],
                             );
                           },
@@ -207,7 +244,12 @@ class _ConversationViewState extends State<_ConversationView> {
                       }
                       final m = reversed[showTypingBubble ? index - 1 : index];
                       final isMine = m.senderId == widget.currentUser.uid;
-                      return _MessageBubble(message: m, isMine: isMine, palette: p);
+                      return _MessageBubble(
+                        message: m,
+                        isMine: isMine,
+                        palette: p,
+                        otherLastReadAt: state.otherLastReadAt,
+                      );
                     },
                   );
                 },
@@ -340,11 +382,29 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMine;
   final AppPalette palette;
-  const _MessageBubble({required this.message, required this.isMine, required this.palette});
+  // Only meaningful when isMine -- the other side's last-read
+  // timestamp, used to decide the blue "read" double-tick below.
+  final DateTime? otherLastReadAt;
+  const _MessageBubble({
+    required this.message,
+    required this.isMine,
+    required this.palette,
+    this.otherLastReadAt,
+  });
 
   @override
   Widget build(BuildContext context) {
     final time = message.createdAt == null ? '' : DateFormat('h:mm a').format(message.createdAt!);
+
+    // A message I sent counts as "read" once the other side's
+    // lastReadAt is at or after this message's own createdAt --
+    // i.e. they've opened the thread at a point in time that
+    // included this message.
+    final createdAt = message.createdAt;
+    final isRead = isMine &&
+        createdAt != null &&
+        otherLastReadAt != null &&
+        !createdAt.isAfter(otherLastReadAt!);
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -366,9 +426,26 @@ class _MessageBubble extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             Text(message.text, style: TextStyle(fontSize: 14, height: 1.35, color: isMine ? Colors.white : palette.textPrimary)),
-            if (time.isNotEmpty) ...[
+            if (time.isNotEmpty || isMine) ...[
               const SizedBox(height: 4),
-              Text(time, style: TextStyle(fontSize: 10, color: isMine ? Colors.white.withOpacity(0.75) : palette.textSecondary)),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (time.isNotEmpty)
+                    Text(time, style: TextStyle(fontSize: 10, color: isMine ? Colors.white.withOpacity(0.75) : palette.textSecondary)),
+                  // Only ever shown on my own outgoing messages --
+                  // same as WhatsApp, an incoming bubble never gets a
+                  // tick. Single tick = sent; double blue tick = read.
+                  if (isMine) ...[
+                    const SizedBox(width: 3),
+                    Icon(
+                      isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                      size: 13,
+                      color: isRead ? const Color(0xFF34B7F1) : Colors.white.withOpacity(0.75),
+                    ),
+                  ],
+                ],
+              ),
             ],
           ],
         ),

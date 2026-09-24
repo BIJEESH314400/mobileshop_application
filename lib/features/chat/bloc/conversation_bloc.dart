@@ -90,11 +90,17 @@ class ConversationBloc extends Bloc<ConversationEvent, ConversationState> {
       _repository.watchConversation(conversationId),
       onData: (conversation) {
         // Watch the *other* side's flag -- an owner cares about
-        // typingEmployee, an employee cares about typingOwner.
+        // typingEmployee, an employee cares about typingOwner. Same
+        // stream also carries their lastReadAt, used for the blue
+        // read-tick on messages I sent -- no need for a third
+        // subscription, this doc already has both fields.
         final otherIsTyping = conversation == null
             ? false
             : (currentUser.isOwner ? conversation.typingEmployee : conversation.typingOwner);
-        return state.copyWith(otherIsTyping: otherIsTyping);
+        final otherLastReadAt = conversation == null
+            ? null
+            : (currentUser.isOwner ? conversation.lastReadAtEmployee : conversation.lastReadAtOwner);
+        return state.copyWith(otherIsTyping: otherIsTyping, otherLastReadAt: otherLastReadAt);
       },
       // A typing indicator is cosmetic -- if this stream errors, just
       // silently stop showing it rather than surfacing an error banner

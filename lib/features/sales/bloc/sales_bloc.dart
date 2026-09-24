@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/constants/shop_constants.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/sale.dart';
+import '../../../core/repositories/current_user_repository.dart';
 import '../../../core/repositories/product_repository.dart';
 import '../../../core/repositories/sale_repository.dart';
 import 'sales_event.dart';
@@ -11,10 +12,15 @@ import 'sales_state.dart';
 class SalesBloc extends Bloc<SalesEvent, SalesState> {
   final ProductRepository _productRepository;
   final SaleRepository _saleRepository;
+  final CurrentUserRepository _currentUserRepository;
 
-  SalesBloc({ProductRepository? productRepository, SaleRepository? saleRepository})
-      : _productRepository = productRepository ?? ProductRepository(),
+  SalesBloc({
+    ProductRepository? productRepository,
+    SaleRepository? saleRepository,
+    CurrentUserRepository? currentUserRepository,
+  })  : _productRepository = productRepository ?? ProductRepository(),
         _saleRepository = saleRepository ?? SaleRepository(),
+        _currentUserRepository = currentUserRepository ?? CurrentUserRepository(),
         super(const SalesState()) {
     on<SalesSubscriptionRequested>(_onSubscriptionRequested);
     on<SaleItemAdded>(_onItemAdded);
@@ -30,6 +36,20 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
     Emitter<SalesState> emit,
   ) async {
     emit(state.copyWith(isLoadingProducts: true, clearError: true));
+
+    // One-shot -- who's signed in doesn't change mid-sale, same
+    // reasoning as CurrentUserBloc's single fetch on Profile. Done
+    // before the (long-lived, never-completing) product stream below,
+    // since anything after `await emit.forEach(...)` wouldn't run until
+    // that stream closes. A failed lookup is swallowed -- state.currentUser
+    // just stays null and the sale still goes through, only without
+    // seller attribution (see _onSubmitted).
+    try {
+      final currentUser = await _currentUserRepository.loadCurrentUser();
+      emit(state.copyWith(currentUser: currentUser));
+    } catch (_) {
+      // Leave currentUser null -- see the comment above.
+    }
 
     // Same live-stream pattern as ProductsBloc — the "Add Product"
     // picker stays current with stock/price changes made anywhere else
@@ -145,6 +165,11 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
         total: state.total,
         paymentMethod: _paymentKey(state.paymentMethod),
         createdAt: null, // set server-side — see Sale.toMap()
+        soldByUid: state.currentUser?.uid ?? '',
+        soldByName: state.currentUser?.displayName ?? '',
+        soldByRole: state.currentUser == null
+            ? 'owner'
+            : (state.currentUser!.isOwner ? 'owner' : 'employee'),
       );
 
       await _saleRepository.completeSale(sale);

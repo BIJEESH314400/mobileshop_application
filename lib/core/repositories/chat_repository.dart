@@ -105,13 +105,17 @@ class ChatRepository {
   }
 
   /// Called when a conversation screen opens, so its own unread flag
-  /// clears for whichever side just looked at it.
+  /// clears for whichever side just looked at it. Also stamps this
+  /// side's lastReadAt -- the other side uses that timestamp to decide
+  /// which of *their* sent messages get the blue "read" double-tick.
   Future<void> markRead({required String conversationId, required String asRole}) {
     return _conversations.doc(conversationId).set({
       if (asRole == 'owner') 'unreadForOwner': false,
       if (asRole == 'employee') 'unreadForEmployee': false,
       if (asRole == 'owner') 'unreadCountOwner': 0,
       if (asRole == 'employee') 'unreadCountEmployee': 0,
+      if (asRole == 'owner') 'lastReadAtOwner': FieldValue.serverTimestamp(),
+      if (asRole == 'employee') 'lastReadAtEmployee': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 

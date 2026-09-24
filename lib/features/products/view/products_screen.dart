@@ -7,6 +7,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import 'add_product_screen.dart';
 import '../bloc/products_bloc.dart';
 import '../bloc/products_event.dart';
 import '../bloc/products_state.dart';
@@ -288,7 +289,9 @@ class _ProductCard extends StatelessWidget {
     final spec = [product.brand, product.condition].where((part) => part.isNotEmpty).join(' · ');
 
     return GestureDetector(
-      onTap: () => _comingSoon(context, product.name),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => AddProductScreen(product: product)),
+      ),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(

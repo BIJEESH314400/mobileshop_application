@@ -26,6 +26,15 @@ class Conversation extends Equatable {
   final int unreadCountEmployee;
   final bool typingOwner;
   final bool typingEmployee;
+  // When each side last actually looked at this conversation -- used to
+  // decide the blue "read" double-tick on a message *I* sent: if my
+  // message's createdAt is at or before the other side's lastReadAt,
+  // they've seen it. Set by ChatRepository.markRead() every time that
+  // side's messages stream updates (same call that clears their unread
+  // flag/count), so it always reflects the last moment they were
+  // actually looking at the thread.
+  final DateTime? lastReadAtOwner;
+  final DateTime? lastReadAtEmployee;
 
   const Conversation({
     required this.employeeUid,
@@ -41,10 +50,14 @@ class Conversation extends Equatable {
     this.unreadCountEmployee = 0,
     this.typingOwner = false,
     this.typingEmployee = false,
+    this.lastReadAtOwner,
+    this.lastReadAtEmployee,
   });
 
   factory Conversation.fromMap(String id, Map<String, dynamic> map) {
     final rawLastMessageAt = map['lastMessageAt'];
+    final rawLastReadAtOwner = map['lastReadAtOwner'];
+    final rawLastReadAtEmployee = map['lastReadAtEmployee'];
     return Conversation(
       employeeUid: id,
       employeeName: map['employeeName'] as String? ?? '',
@@ -59,6 +72,8 @@ class Conversation extends Equatable {
       unreadCountEmployee: (map['unreadCountEmployee'] as num?)?.toInt() ?? 0,
       typingOwner: map['typingOwner'] as bool? ?? false,
       typingEmployee: map['typingEmployee'] as bool? ?? false,
+      lastReadAtOwner: rawLastReadAtOwner is Timestamp ? rawLastReadAtOwner.toDate() : null,
+      lastReadAtEmployee: rawLastReadAtEmployee is Timestamp ? rawLastReadAtEmployee.toDate() : null,
     );
   }
 
@@ -77,5 +92,7 @@ class Conversation extends Equatable {
         unreadCountEmployee,
         typingOwner,
         typingEmployee,
+        lastReadAtOwner,
+        lastReadAtEmployee,
       ];
 }

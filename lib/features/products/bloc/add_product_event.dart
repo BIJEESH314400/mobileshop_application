@@ -20,6 +20,11 @@ class AddProductSubmitted extends AddProductEvent {
   final String condition;
   final String description;
 
+  /// Null when adding a brand-new product. When editing an existing one,
+  /// this carries its Firestore document id so the Bloc updates that
+  /// document in place instead of creating a new one.
+  final String? productId;
+
   const AddProductSubmitted({
     required this.name,
     required this.category,
@@ -29,8 +34,10 @@ class AddProductSubmitted extends AddProductEvent {
     required this.sku,
     required this.condition,
     required this.description,
+    this.productId,
   });
 
   @override
-  List<Object?> get props => [name, category, brand, price, stockQty, sku, condition, description];
+  List<Object?> get props =>
+      [name, category, brand, price, stockQty, sku, condition, description, productId];
 }

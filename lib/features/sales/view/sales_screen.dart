@@ -578,7 +578,6 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                                               children: [
                                                 _PickerStepBtn(
                                                   icon: Icons.remove_rounded,
-                                                  palette: p,
                                                   enabled: inCartQty > 0,
                                                   onTap: () {
                                                     // At qty 1, SaleItemQtyChanged(-1) is a no-op by
@@ -614,7 +613,6 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                                                 ),
                                                 _PickerStepBtn(
                                                   icon: Icons.add_rounded,
-                                                  palette: p,
                                                   enabled: !disabled,
                                                   onTap: () => context.read<SalesBloc>().add(SaleItemAdded(product)),
                                                 ),
@@ -666,13 +664,11 @@ class _PickerStockStyle {
 /// no tap) when there's nothing to add or remove.
 class _PickerStepBtn extends StatelessWidget {
   final IconData icon;
-  final AppPalette palette;
   final bool enabled;
   final VoidCallback onTap;
 
   const _PickerStepBtn({
     required this.icon,
-    required this.palette,
     required this.enabled,
     required this.onTap,
   });
@@ -690,14 +686,22 @@ class _PickerStepBtn extends StatelessWidget {
           // which is close in shade to the card behind it and can look
           // like "no button" on first render) — enabled/disabled is shown
           // by the border/icon color, never by making the box itself faint.
+          //
+          // AppColors.iconTint is a FIXED light tint in both themes (same
+          // square used behind every product/cart icon app-wide) -- so the
+          // icon on top must also use fixed colors, not palette.textPrimary
+          // (which turns near-white in dark mode and disappears against
+          // this always-light fill). Matches the accent-icon-on-iconTint
+          // pattern already used everywhere else (Products list, Chat,
+          // Notifications, etc.).
           color: AppColors.iconTint,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: enabled ? AppColors.accent : palette.border, width: enabled ? 1.4 : 1),
+          border: Border.all(color: enabled ? AppColors.accent : AppColors.border, width: enabled ? 1.4 : 1),
         ),
         child: Icon(
           icon,
           size: 15,
-          color: enabled ? palette.textPrimary : palette.textSecondary.withOpacity(0.4),
+          color: enabled ? AppColors.accent : AppColors.textSecondary.withOpacity(0.4),
         ),
       ),
     );

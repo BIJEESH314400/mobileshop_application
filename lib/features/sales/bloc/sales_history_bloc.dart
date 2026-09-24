@@ -23,7 +23,12 @@ class SalesHistoryBloc extends Bloc<SalesHistoryEvent, SalesHistoryState> {
 
     return emit.forEach<List<Sale>>(
       _saleRepository.watchSales(shopId: currentShopId),
-      onData: (sales) => state.copyWith(isLoading: false, sales: sales, clearError: true),
+      onData: (sales) => state.copyWith(
+        isLoading: false,
+        sales: sales,
+        clearError: true,
+        lastUpdatedAt: DateTime.now(),
+      ),
       onError: (error, stackTrace) => state.copyWith(
         isLoading: false,
         errorMessage: 'Could not load past sales. Please check your connection and try again.',

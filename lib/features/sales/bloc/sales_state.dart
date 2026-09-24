@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../core/models/app_user.dart';
 import '../../../core/models/product.dart';
 
 enum PaymentMethod { upi, card, cash }
@@ -54,6 +55,12 @@ class SalesState extends Equatable {
   final double? completedTotal;
   final String? errorMessage;
 
+  /// Who's actually signed in and ringing up this sale -- loaded once
+  /// when the screen opens (see SalesBloc._onSubscriptionRequested) and
+  /// stamped onto the Sale on submit. Null only very briefly while that
+  /// lookup is still in flight, or if it failed outright.
+  final AppUser? currentUser;
+
   const SalesState({
     this.isLoadingProducts = true,
     this.availableProducts = const [],
@@ -64,6 +71,7 @@ class SalesState extends Equatable {
     this.isSuccess = false,
     this.completedTotal,
     this.errorMessage,
+    this.currentUser,
   });
 
   double get subtotal => cartItems.fold(0.0, (sum, item) => sum + item.lineTotal);
@@ -94,6 +102,7 @@ class SalesState extends Equatable {
     double? completedTotal,
     String? errorMessage,
     bool clearError = false,
+    AppUser? currentUser,
   }) {
     return SalesState(
       isLoadingProducts: isLoadingProducts ?? this.isLoadingProducts,
@@ -105,6 +114,7 @@ class SalesState extends Equatable {
       isSuccess: isSuccess ?? this.isSuccess,
       completedTotal: completedTotal ?? this.completedTotal,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      currentUser: currentUser ?? this.currentUser,
     );
   }
 
@@ -119,5 +129,6 @@ class SalesState extends Equatable {
         isSuccess,
         completedTotal,
         errorMessage,
+        currentUser,
       ];
 }

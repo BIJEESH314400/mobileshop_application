@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/models/product.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/lookup_picker_dialog.dart';
@@ -15,13 +16,20 @@ import '../bloc/add_product_state.dart';
 /// picker (with a built-in "+ Add New") instead of showing a fixed
 /// value, and Save actually writes the product to Firestore.
 class AddProductScreen extends StatelessWidget {
-  const AddProductScreen({super.key});
+  /// Null when adding a brand-new product (the normal case, from the
+  /// Products list's + button or Dashboard's quick action). Passing an
+  /// existing product switches this same form into edit mode -- same
+  /// fields, pre-filled, saving updates that product instead of creating
+  /// a new one.
+  final Product? product;
+
+  const AddProductScreen({super.key, this.product});
 
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => AddProductBloc(),
-      child: const _AddProductView(),
+      child: _AddProductView(product: product),
     );
   }
 }
@@ -42,7 +50,8 @@ extension on _Condition {
 }
 
 class _AddProductView extends StatefulWidget {
-  const _AddProductView();
+  final Product? product;
+  const _AddProductView({this.product});
 
   @override
   State<_AddProductView> createState() => _AddProductViewState();
@@ -62,6 +71,31 @@ class _AddProductViewState extends State<_AddProductView> {
   String? _category;
   String? _brand;
   _Condition _condition = _Condition.new_;
+
+  bool get _isEditing => widget.product != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final product = widget.product;
+    if (product == null) return;
+
+    _nameCtrl.text = product.name;
+    // Whole rupees show without decimals (e.g. "68999"); anything with
+    // paise keeps them (e.g. "68999.50") rather than always forcing two
+    // decimal places on a price that was entered as a round number.
+    _priceCtrl.text =
+        product.price == product.price.roundToDouble() ? product.price.toStringAsFixed(0) : product.price.toString();
+    _stockCtrl.text = product.stockQty.toString();
+    _skuCtrl.text = product.sku;
+    _descCtrl.text = product.description;
+    _category = product.category.isEmpty ? null : product.category;
+    _brand = product.brand.isEmpty ? null : product.brand;
+    _condition = _Condition.values.firstWhere(
+      (c) => c.label == product.condition,
+      orElse: () => _Condition.new_,
+    );
+  }
 
   @override
   void dispose() {
@@ -108,6 +142,7 @@ class _AddProductViewState extends State<_AddProductView> {
             sku: _skuCtrl.text,
             condition: _condition.label,
             description: _descCtrl.text,
+            productId: widget.product?.id,
           ),
         );
   }
@@ -132,7 +167,7 @@ class _AddProductViewState extends State<_AddProductView> {
         if (state.isSuccess) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
-            ..showSnackBar(const SnackBar(content: Text('Product saved')));
+            ..showSnackBar(SnackBar(content: Text(_isEditing ? 'Product updated' : 'Product saved')));
           Navigator.pop(context);
         }
       },
@@ -157,7 +192,7 @@ class _AddProductViewState extends State<_AddProductView> {
                             Icon(Icons.arrow_back_rounded, size: 20, color: p.textPrimary),
                             const SizedBox(width: 14),
                             Text(
-                              'Add Product',
+                              _isEditing ? 'Edit Product' : 'Add Product',
                               style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: p.textPrimary),
                             ),
                           ],
@@ -428,9 +463,9 @@ class _AddProductViewState extends State<_AddProductView> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2.2, valueColor: AlwaysStoppedAnimation(Colors.white)),
                             )
-                          : const Text(
-                              'Save Product',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                          : Text(
+                              _isEditing ? 'Save Changes' : 'Save Product',
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
                             ),
                     ),
                   ),
