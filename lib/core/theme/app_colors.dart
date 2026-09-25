@@ -32,6 +32,15 @@ class AppColors {
   static const successBg = Color(0xFFDCFCE7);
   static const dangerBg = Color(0xFFFEE2E2);
 
+  // Added for Add Customer's section badges/icons (2026-09-25) --
+  // "READY" (blue) and "B2B VERIFIED" (purple) needed colors outside
+  // the success/warning/danger set above, kept fixed in both themes
+  // same as the rest of this bg/solid-color pair family.
+  static const info = Color(0xFF2563EB);
+  static const infoBg = Color(0xFFDBEAFE);
+  static const purple = Color(0xFF7C3AED);
+  static const purpleBg = Color(0xFFEDE9FE);
+
   // Light-lavender tint square behind a product/cart-item icon (Products,
   // Sales). Matches the design canvas exactly; kept fixed in both themes,
   // same as the other brand/status tint pairs above.

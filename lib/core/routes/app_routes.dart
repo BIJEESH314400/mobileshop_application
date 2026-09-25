@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../features/auth/view/forgot_password_screen.dart';
 import '../../features/auth/view/login_screen.dart';
+import '../../features/customers/view/add_customer_screen.dart';
 import '../../features/customers/view/customers_screen.dart';
 import '../../features/dashboard/view/dashboard_screen.dart';
 import '../../features/products/view/add_product_screen.dart';
@@ -28,6 +29,7 @@ class AppRoutes {
   static const salesHistory = '/sales-history';
   static const service = '/service';
   static const customers = '/customers';
+  static const addCustomer = '/add-customer';
   static const reports = '/reports';
   static const profile = '/profile';
   static const staffManagement = '/staff-management';
@@ -44,6 +46,7 @@ class AppRoutes {
     salesHistory: (_) => const SalesHistoryScreen(),
     service: (_) => const ServiceScreen(),
     customers: (_) => const CustomersScreen(),
+    addCustomer: (_) => const AddCustomerScreen(),
     reports: (_) => const ReportsScreen(),
     profile: (_) => const ProfileScreen(),
     staffManagement: (_) => const StaffManagementScreen(),

@@ -4,12 +4,12 @@ import 'package:intl/intl.dart';
 
 import '../../../core/models/customer.dart';
 import '../../../core/models/sale.dart';
+import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../bloc/customers_bloc.dart';
 import '../bloc/customers_event.dart';
 import '../bloc/customers_state.dart';
-import 'add_customer_sheet.dart';
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 final _dateFormat = DateFormat('d MMM, h:mm a');
@@ -51,7 +51,12 @@ class _CustomersViewState extends State<_CustomersView> {
   }
 
   Future<void> _addCustomer(BuildContext context) async {
-    await showAddCustomerSheet(context);
+    // 2026-09-25: the Customers screen's own "Add Customer" button now
+    // opens the bigger full-page form (AddCustomerScreen) instead of
+    // the small `showAddCustomerSheet` bottom sheet -- that sheet is
+    // now only used by the Sales checkout's quick "+ New" shortcut,
+    // which needs to stay fast mid-sale.
+    await Navigator.of(context).pushNamed(AppRoutes.addCustomer);
     // No explicit refresh needed -- CustomersBloc's live stream picks
     // up the new document on its own, same as every other live list
     // in this app.

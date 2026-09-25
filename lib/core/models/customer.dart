@@ -11,6 +11,7 @@ class Customer extends Equatable {
   final String shopId;
   final String name;
   final String phone;
+  final String altPhone;
   final String email;
   final DateTime? createdAt;
 
@@ -19,6 +20,7 @@ class Customer extends Equatable {
     required this.shopId,
     required this.name,
     this.phone = '',
+    this.altPhone = '',
     this.email = '',
     this.createdAt,
   });
@@ -30,6 +32,7 @@ class Customer extends Equatable {
       shopId: map['shopId'] as String? ?? '',
       name: map['name'] as String? ?? '',
       phone: map['phone'] as String? ?? '',
+      altPhone: map['altPhone'] as String? ?? '',
       email: map['email'] as String? ?? '',
       createdAt: rawCreatedAt is Timestamp ? rawCreatedAt.toDate() : null,
     );
@@ -40,6 +43,7 @@ class Customer extends Equatable {
       'shopId': shopId,
       'name': name,
       'phone': phone,
+      'altPhone': altPhone,
       'email': email,
       'createdAt': FieldValue.serverTimestamp(),
     };
@@ -55,5 +59,5 @@ class Customer extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, shopId, name, phone, email, createdAt];
+  List<Object?> get props => [id, shopId, name, phone, altPhone, email, createdAt];
 }
