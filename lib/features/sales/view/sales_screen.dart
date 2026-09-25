@@ -10,6 +10,7 @@ import '../../../core/widgets/app_bottom_nav.dart';
 import '../bloc/sales_bloc.dart';
 import '../bloc/sales_event.dart';
 import '../bloc/sales_state.dart';
+import 'customer_picker_sheet.dart';
 
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -25,7 +26,9 @@ class SalesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => SalesBloc()..add(const SalesSubscriptionRequested()),
+      create: (_) => SalesBloc()
+        ..add(const SalesSubscriptionRequested())
+        ..add(const SalesCustomersSubscriptionRequested()),
       child: const _SalesView(),
     );
   }
@@ -191,6 +194,58 @@ class _SalesViewState extends State<_SalesView> {
                                   'Add Product',
                                   style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
                                 ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'CUSTOMER (OPTIONAL)',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: p.textSecondary),
+                        ),
+                        const SizedBox(height: 10),
+                        GestureDetector(
+                          onTap: () async {
+                            final result = await showCustomerPickerSheet(
+                              context,
+                              customers: state.availableCustomers,
+                              selected: state.selectedCustomer,
+                            );
+                            if (result == null || !context.mounted) return;
+                            context.read<SalesBloc>().add(SaleCustomerSelected(result.customer));
+                          },
+                          child: Container(
+                            height: 52,
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: p.card,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: p.border),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.person_outline_rounded, size: 18, color: p.textSecondary),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    state.selectedCustomer == null
+                                        ? 'Walk-in customer — tap to add'
+                                        : state.selectedCustomer!.name,
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: state.selectedCustomer == null ? FontWeight.w500 : FontWeight.w700,
+                                      color: state.selectedCustomer == null ? p.textSecondary : p.textPrimary,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (state.selectedCustomer != null)
+                                  GestureDetector(
+                                    onTap: () => context.read<SalesBloc>().add(const SaleCustomerSelected(null)),
+                                    child: Icon(Icons.close_rounded, size: 18, color: p.textSecondary),
+                                  )
+                                else
+                                  Icon(Icons.chevron_right_rounded, size: 18, color: p.textSecondary),
                               ],
                             ),
                           ),

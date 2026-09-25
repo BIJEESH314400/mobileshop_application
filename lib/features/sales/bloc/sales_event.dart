@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import 'sales_state.dart';
 
@@ -63,6 +64,28 @@ class SalePaymentMethodChanged extends SalesEvent {
 
   @override
   List<Object?> get props => [method];
+}
+
+/// Fired once when the Sales screen opens, alongside
+/// SalesSubscriptionRequested — starts a SEPARATE, concurrent live
+/// subscription to this shop's customer directory (used to fill the
+/// customer picker sheet), same two-concurrent-streams-in-one-Bloc
+/// pattern ConversationBloc already uses for its typing indicator.
+class SalesCustomersSubscriptionRequested extends SalesEvent {
+  const SalesCustomersSubscriptionRequested();
+}
+
+/// Fired from the customer picker sheet. `customer` null means
+/// "cleared back to walk-in" -- see CustomerPickerResult's own doc
+/// comment for why a bare nullable field on its own can't express
+/// that (vs. "sheet closed with no change", which just doesn't fire
+/// this event at all).
+class SaleCustomerSelected extends SalesEvent {
+  final Customer? customer;
+  const SaleCustomerSelected(this.customer);
+
+  @override
+  List<Object?> get props => [customer];
 }
 
 /// Fired when "Complete Sale" is tapped.

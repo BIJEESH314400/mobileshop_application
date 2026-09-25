@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../core/models/sale.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import 'date_range_filter_sheet.dart';
 import '../bloc/sales_history_bloc.dart';
 import '../bloc/sales_history_event.dart';
 import '../bloc/sales_history_state.dart';
@@ -146,14 +147,15 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
   }
 
   Future<void> _pickDateRange(BuildContext context) async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(now.year - 2),
-      lastDate: now,
-      initialDateRange: _dateRange,
-    );
-    if (picked != null) setState(() => _dateRange = picked);
+    // Custom-built bottom sheet (quick pills + a real calendar with
+    // future days grayed out) replacing Flutter's stock range picker --
+    // see the project status doc for the design discussion. Returns
+    // null if the sheet was just closed (X) -- no change to the filter;
+    // `cleared: true` if Clear was tapped -- filter removed; otherwise
+    // a picked range to apply.
+    final result = await showDateRangeFilterSheet(context, initialRange: _dateRange);
+    if (result == null) return;
+    setState(() => _dateRange = result.cleared ? null : (result.range ?? _dateRange));
   }
 
   List<Sale> _filtered(List<Sale> sales) {
@@ -771,6 +773,13 @@ class _SaleRowContent extends StatelessWidget {
     final paymentStyle = _paymentStyle(sale.paymentMethod);
 
     return GestureDetector(
+      // Without this, GestureDetector only counts a tap as "hit" where
+      // something is actually painted underneath it (the icon square,
+      // the text glyphs) -- the blank space in between (padding, gaps,
+      // the empty part of the date/name column) silently doesn't
+      // respond at all. `opaque` makes the whole row's bounding box
+      // tappable, matching every other tappable row/card in this app.
+      behavior: HitTestBehavior.opaque,
       onTap: () => _showReceipt(context, sale, palette),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -819,13 +828,18 @@ class _SaleRowContent extends StatelessWidget {
                       ),
                       if (sale.soldByName.isNotEmpty) ...[
                         Text('  •  ', style: TextStyle(fontSize: 11.5, color: palette.textSecondary)),
-                        Icon(Icons.person_outline_rounded, size: 11, color: palette.textSecondary),
+                        const Icon(Icons.person_outline_rounded, size: 11, color: AppColors.accent),
                         const SizedBox(width: 2),
                         Flexible(
                           child: Text(
                             sale.soldByName,
                             overflow: TextOverflow.ellipsis,
-                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: palette.textSecondary),
+                            // Same accent color as the receipt's "Sold
+                            // by" name, so the seller's name reads as
+                            // the same, easy-to-spot color everywhere
+                            // it shows -- not blended into the rest of
+                            // the muted secondary-text row.
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.accent),
                           ),
                         ),
                       ],
@@ -897,9 +911,17 @@ void _showReceipt(BuildContext context, Sale sale, AppPalette palette) {
               ),
               if (sale.soldByName.isNotEmpty) ...[
                 const SizedBox(height: 2),
-                Text(
-                  'Sold by ${sale.soldByName}${sale.soldByRole == 'owner' ? ' (Owner)' : ' (Staff)'}',
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: palette.textSecondary),
+                Text.rich(
+                  TextSpan(
+                    style: TextStyle(fontSize: 12.5, color: palette.textSecondary),
+                    children: [
+                      const TextSpan(text: 'Sold by '),
+                      TextSpan(
+                        text: '${sale.soldByName}${sale.soldByRole == 'owner' ? ' (Owner)' : ' (Staff)'}',
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent),
+                      ),
+                    ],
+                  ),
                 ),
               ],
               const SizedBox(height: 16),

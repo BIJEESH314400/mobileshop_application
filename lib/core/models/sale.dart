@@ -68,6 +68,19 @@ class Sale extends Equatable {
   final String soldByName;
   final String soldByRole; // 'owner' | 'employee'
 
+  // Which customer this sale was rung up for -- optional, added
+  // 2026-09-24 alongside the Customers screen. Empty/'' means "walk-in
+  // / not recorded", same empty-string-as-absent convention as
+  // soldByName above -- every sale completed before this field existed
+  // reads back the same way rather than needing a separate null check
+  // everywhere. customerName/customerPhone are snapshotted at sale
+  // time (same reasoning as soldByName/SaleItem's price snapshot): if
+  // the customer's saved name/phone changes later, this sale still
+  // shows what it really was at the time.
+  final String customerId;
+  final String customerName;
+  final String customerPhone;
+
   const Sale({
     required this.id,
     required this.shopId,
@@ -81,6 +94,9 @@ class Sale extends Equatable {
     this.soldByUid = '',
     this.soldByName = '',
     this.soldByRole = 'owner',
+    this.customerId = '',
+    this.customerName = '',
+    this.customerPhone = '',
   });
 
   factory Sale.fromMap(String id, Map<String, dynamic> map) {
@@ -104,6 +120,9 @@ class Sale extends Equatable {
       soldByUid: map['soldByUid'] as String? ?? '',
       soldByName: map['soldByName'] as String? ?? '',
       soldByRole: map['soldByRole'] as String? ?? 'owner',
+      customerId: map['customerId'] as String? ?? '',
+      customerName: map['customerName'] as String? ?? '',
+      customerPhone: map['customerPhone'] as String? ?? '',
     );
   }
 
@@ -123,6 +142,9 @@ class Sale extends Equatable {
       'soldByUid': soldByUid,
       'soldByName': soldByName,
       'soldByRole': soldByRole,
+      'customerId': customerId,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
     };
   }
 
@@ -140,5 +162,8 @@ class Sale extends Equatable {
         soldByUid,
         soldByName,
         soldByRole,
+        customerId,
+        customerName,
+        customerPhone,
       ];
 }

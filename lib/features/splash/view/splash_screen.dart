@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../core/routes/root_navigator_key.dart';
+import '../../pin/view/pin_unlock_screen.dart';
+import '../../pin/view/set_pin_screen.dart';
 import '../../../core/theme/app_colors.dart';
 import '../bloc/splash_bloc.dart';
 import '../bloc/splash_event.dart';
@@ -19,10 +22,35 @@ class SplashScreen extends StatelessWidget {
       create: (_) => SplashBloc()..add(const SplashStarted()),
       child: BlocListener<SplashBloc, AuthStatus>(
         listener: (context, status) {
+          // Uses rootNavigatorKey rather than this screen's own
+          // `context` for every outcome here -- once a replacement
+          // route is pushed, Splash's own context can be disposed
+          // before PinUnlockScreen's `onUnlocked` callback below ever
+          // runs, and calling Navigator.of() on a disposed context
+          // throws. rootNavigatorKey.currentState stays valid for the
+          // whole app's lifetime regardless of which screen is on top.
+          final navigator = rootNavigatorKey.currentState;
+          if (navigator == null) return;
           if (status == AuthStatus.unauthenticated) {
-            Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+            navigator.pushReplacementNamed(AppRoutes.login);
           } else if (status == AuthStatus.authenticated) {
-            Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+            navigator.pushReplacementNamed(AppRoutes.dashboard);
+          } else if (status == AuthStatus.authenticatedNeedsPin) {
+            navigator.pushReplacement(MaterialPageRoute(
+              builder: (_) => PinUnlockScreen(
+                onUnlocked: () => rootNavigatorKey.currentState?.pushReplacementNamed(AppRoutes.dashboard),
+              ),
+            ));
+          } else if (status == AuthStatus.authenticatedNeedsSetPin) {
+            // Signed in, but no PIN saved -- only reachable in the
+            // normal flow if the app was killed mid-setup (see
+            // AuthStatus.authenticatedNeedsSetPin's doc comment).
+            // Same mandatory SetPinScreen as LoginScreen uses.
+            navigator.pushReplacement(MaterialPageRoute(
+              builder: (_) => SetPinScreen(
+                onSetupComplete: () => rootNavigatorKey.currentState?.pushReplacementNamed(AppRoutes.dashboard),
+              ),
+            ));
           }
         },
         child: Scaffold(

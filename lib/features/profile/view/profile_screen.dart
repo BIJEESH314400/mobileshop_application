@@ -7,6 +7,9 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/repositories/pin_repository.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../pin/view/set_pin_screen.dart';
 import '../../chat/view/chat_list_screen.dart';
 import '../../chat/view/conversation_screen.dart';
 import '../../theme/bloc/theme_bloc.dart';
@@ -58,6 +61,7 @@ class _ProfileView extends StatefulWidget {
 
 class _ProfileViewState extends State<_ProfileView> {
   bool _notifOn = true;
+  Future<bool>? _hasPinFuture;
 
   void _comingSoon(String feature) {
     ScaffoldMessenger.of(context)
@@ -65,11 +69,51 @@ class _ProfileViewState extends State<_ProfileView> {
       ..showSnackBar(SnackBar(content: Text('$feature — coming soon')));
   }
 
+  void _openSetPin() {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SetPinScreen())).then((_) {
+      // Whether or not a PIN was actually saved, re-check so the "Not
+      // set"/"Enabled" subtitle reflects reality when they come back.
+      if (mounted) setState(() => _hasPinFuture = null);
+    });
+  }
+
   Future<void> _logOut() async {
+    // Quick PIN is now a REQUIRED step of logging back in (2026-09-25),
+    // not something set once and kept forever -- so logging out wipes
+    // this account's saved PIN, and the next login always asks them to
+    // set a fresh one (see LoginBloc/LoginScreen's needsSetPin
+    // handling). Best-effort and never allowed to block logout: if
+    // this fails (network blip, anything), the only consequence is the
+    // next login shows the PIN-unlock screen for the OLD pin instead of
+    // "set a new one" -- annoying, not unsafe, and not worth stranding
+    // someone mid-logout over.
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != null) {
+      try {
+        await PinRepository().clearPin(uid);
+      } catch (e, st) {
+        AppLogger.error('ProfileScreen._logOut (clearPin)', e, st);
+      }
+    }
     // Actually end the Firebase session (previously this just navigated
     // to Login without signing out — harmless day-to-day since signing
     // in again overwrites the session, but not correct logout hygiene).
-    await FirebaseAuth.instance.signOut();
+    //
+    // Wrapped in try/catch now -- previously a failed signOut() here
+    // (a network blip, anything) threw unhandled, and since there's no
+    // loading/disabled state on the button, the person would just see
+    // nothing happen and could easily end up tapping it again, or
+    // force-closing the app thinking it had frozen.
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (e, st) {
+      AppLogger.error('ProfileScreen._logOut', e, st);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text("Couldn't log out — check your connection and try again")));
+      return;
+    }
     if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.login, (route) => false);
   }
@@ -90,6 +134,15 @@ class _ProfileViewState extends State<_ProfileView> {
 
     final displayName = user?.displayName ?? '...';
     final roleLabel = user == null ? '' : (user.isOwner ? 'Shop Owner · 4B Mobiles' : 'Staff · 4B Mobiles');
+
+    // Kicked off here (not initState) since it needs `user.uid`, which
+    // only becomes available once CurrentUserBloc resolves -- cheap
+    // enough to just re-check on every build once, since _hasPinFuture
+    // only gets reset (to null) after CurrentUserBloc first resolves or
+    // after returning from SetPinScreen (see _openSetPin above).
+    if (user != null && _hasPinFuture == null) {
+      _hasPinFuture = PinRepository().hasPin(user.uid);
+    }
 
     return Scaffold(
       backgroundColor: p.background,
@@ -252,6 +305,21 @@ class _ProfileViewState extends State<_ProfileView> {
                           ),
                           child: Column(
                             children: [
+                              FutureBuilder<bool>(
+                                future: _hasPinFuture,
+                                builder: (context, snapshot) {
+                                  final hasPin = snapshot.data ?? false;
+                                  return _MenuRow(
+                                    palette: p,
+                                    data: _MenuRowData(
+                                      icon: Icons.pin_outlined,
+                                      label: hasPin ? 'Quick PIN · Enabled' : 'Quick PIN · Not set',
+                                      onTap: _openSetPin,
+                                    ),
+                                    showBottomBorder: true,
+                                  );
+                                },
+                              ),
                               _ToggleRow(
                                 palette: p,
                                 icon: Icons.notifications_outlined,

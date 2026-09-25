@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../../core/models/app_user.dart';
+import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 
 enum PaymentMethod { upi, card, cash }
@@ -61,6 +62,13 @@ class SalesState extends Equatable {
   /// lookup is still in flight, or if it failed outright.
   final AppUser? currentUser;
 
+  /// Live customer directory for the picker sheet (see
+  /// SalesCustomersSubscriptionRequested) and whichever one is picked
+  /// for THIS sale -- null means walk-in/not recorded, the default,
+  /// matching Sale.customerId's empty-string-as-absent convention.
+  final List<Customer> availableCustomers;
+  final Customer? selectedCustomer;
+
   const SalesState({
     this.isLoadingProducts = true,
     this.availableProducts = const [],
@@ -72,6 +80,8 @@ class SalesState extends Equatable {
     this.completedTotal,
     this.errorMessage,
     this.currentUser,
+    this.availableCustomers = const [],
+    this.selectedCustomer,
   });
 
   double get subtotal => cartItems.fold(0.0, (sum, item) => sum + item.lineTotal);
@@ -103,6 +113,9 @@ class SalesState extends Equatable {
     String? errorMessage,
     bool clearError = false,
     AppUser? currentUser,
+    List<Customer>? availableCustomers,
+    Customer? selectedCustomer,
+    bool clearCustomer = false,
   }) {
     return SalesState(
       isLoadingProducts: isLoadingProducts ?? this.isLoadingProducts,
@@ -115,6 +128,8 @@ class SalesState extends Equatable {
       completedTotal: completedTotal ?? this.completedTotal,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       currentUser: currentUser ?? this.currentUser,
+      availableCustomers: availableCustomers ?? this.availableCustomers,
+      selectedCustomer: clearCustomer ? null : (selectedCustomer ?? this.selectedCustomer),
     );
   }
 
@@ -130,5 +145,7 @@ class SalesState extends Equatable {
         completedTotal,
         errorMessage,
         currentUser,
+        availableCustomers,
+        selectedCustomer,
       ];
 }

@@ -19,12 +19,33 @@ class LoginState extends Equatable {
   /// response. Empty until `needsBranchSelection` is true.
   final List<String> availableBranches;
 
+  /// True once sign-in has actually succeeded AND this account has a
+  /// Quick PIN set -- the View reacts to this by routing through
+  /// PinUnlockScreen instead of straight to Dashboard, same as Splash
+  /// does for an already-signed-in cold start. Needed because a fresh
+  /// username+password login here (e.g. right after reinstalling the
+  /// app, which wipes the locally-persisted Firebase session) never
+  /// goes through Splash at all, so without this check a Quick PIN
+  /// that was set earlier would silently never be asked for again.
+  final bool needsPin;
+
+  /// True once sign-in has succeeded and this account has NO Quick PIN
+  /// saved yet -- Quick PIN is now a REQUIRED part of signing in, not
+  /// an optional extra, so the View reacts to this by routing through
+  /// SetPinScreen (mandatory mode) instead of straight to Dashboard.
+  /// Mutually exclusive with [needsPin]: every successful login has
+  /// exactly one of the two true (an account either already has a PIN
+  /// to verify, or needs one set for the first time).
+  final bool needsSetPin;
+
   const LoginState({
     this.isSubmitting = false,
     this.isSuccess = false,
     this.errorMessage,
     this.needsBranchSelection = false,
     this.availableBranches = const [],
+    this.needsPin = false,
+    this.needsSetPin = false,
   });
 
   LoginState copyWith({
@@ -34,6 +55,8 @@ class LoginState extends Equatable {
     bool clearError = false,
     bool? needsBranchSelection,
     List<String>? availableBranches,
+    bool? needsPin,
+    bool? needsSetPin,
   }) {
     return LoginState(
       isSubmitting: isSubmitting ?? this.isSubmitting,
@@ -41,10 +64,19 @@ class LoginState extends Equatable {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       needsBranchSelection: needsBranchSelection ?? this.needsBranchSelection,
       availableBranches: availableBranches ?? this.availableBranches,
+      needsPin: needsPin ?? this.needsPin,
+      needsSetPin: needsSetPin ?? this.needsSetPin,
     );
   }
 
   @override
-  List<Object?> get props =>
-      [isSubmitting, isSuccess, errorMessage, needsBranchSelection, availableBranches];
+  List<Object?> get props => [
+        isSubmitting,
+        isSuccess,
+        errorMessage,
+        needsBranchSelection,
+        availableBranches,
+        needsPin,
+        needsSetPin,
+      ];
 }

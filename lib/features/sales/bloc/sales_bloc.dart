@@ -1,9 +1,11 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/constants/shop_constants.dart';
+import '../../../core/models/customer.dart';
 import '../../../core/models/product.dart';
 import '../../../core/models/sale.dart';
 import '../../../core/repositories/current_user_repository.dart';
+import '../../../core/repositories/customer_repository.dart';
 import '../../../core/repositories/product_repository.dart';
 import '../../../core/repositories/sale_repository.dart';
 import 'sales_event.dart';
@@ -13,22 +15,52 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
   final ProductRepository _productRepository;
   final SaleRepository _saleRepository;
   final CurrentUserRepository _currentUserRepository;
+  final CustomerRepository _customerRepository;
 
   SalesBloc({
     ProductRepository? productRepository,
     SaleRepository? saleRepository,
     CurrentUserRepository? currentUserRepository,
+    CustomerRepository? customerRepository,
   })  : _productRepository = productRepository ?? ProductRepository(),
         _saleRepository = saleRepository ?? SaleRepository(),
         _currentUserRepository = currentUserRepository ?? CurrentUserRepository(),
+        _customerRepository = customerRepository ?? CustomerRepository(),
         super(const SalesState()) {
     on<SalesSubscriptionRequested>(_onSubscriptionRequested);
+    on<SalesCustomersSubscriptionRequested>(_onCustomersSubscriptionRequested);
     on<SaleItemAdded>(_onItemAdded);
     on<SaleItemQtyChanged>(_onQtyChanged);
     on<SaleItemRemoved>(_onItemRemoved);
     on<SaleDiscountChanged>(_onDiscountChanged);
     on<SalePaymentMethodChanged>(_onPaymentMethodChanged);
+    on<SaleCustomerSelected>(_onCustomerSelected);
     on<SaleSubmitted>(_onSubmitted);
+  }
+
+  // Runs concurrently alongside _onSubscriptionRequested's product
+  // stream above -- same "separate on<EventType> handlers, each with
+  // their own long-lived subscription" pattern ConversationBloc uses
+  // for its typing indicator. A failed customer-list load is swallowed
+  // silently: checkout must stay usable (walk-in sales) even if the
+  // customer directory can't be reached right now.
+  Future<void> _onCustomersSubscriptionRequested(
+    SalesCustomersSubscriptionRequested event,
+    Emitter<SalesState> emit,
+  ) async {
+    await emit.forEach<List<Customer>>(
+      _customerRepository.watchCustomers(shopId: currentShopId),
+      onData: (customers) => state.copyWith(availableCustomers: customers),
+      onError: (error, stackTrace) => state,
+    );
+  }
+
+  void _onCustomerSelected(SaleCustomerSelected event, Emitter<SalesState> emit) {
+    emit(state.copyWith(
+      selectedCustomer: event.customer,
+      clearCustomer: event.customer == null,
+      isSuccess: false,
+    ));
   }
 
   Future<void> _onSubscriptionRequested(
@@ -170,6 +202,9 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
         soldByRole: state.currentUser == null
             ? 'owner'
             : (state.currentUser!.isOwner ? 'owner' : 'employee'),
+        customerId: state.selectedCustomer?.id ?? '',
+        customerName: state.selectedCustomer?.name ?? '',
+        customerPhone: state.selectedCustomer?.phone ?? '',
       );
 
       await _saleRepository.completeSale(sale);
@@ -183,6 +218,7 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
         cartItems: [],
         discountInput: '',
         clearError: true,
+        clearCustomer: true, // reset for the next sale, same as cart/discount above
       ));
     } on InsufficientStockException catch (e) {
       emit(state.copyWith(isSubmitting: false, errorMessage: e.message));

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/routes/app_routes.dart';
+import '../../../core/routes/root_navigator_key.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/branch_select_dialog.dart';
+import '../../pin/view/pin_unlock_screen.dart';
+import '../../pin/view/set_pin_screen.dart';
 import '../bloc/login_bloc.dart';
 import '../bloc/login_event.dart';
 import '../bloc/login_state.dart';
@@ -62,7 +65,33 @@ class _LoginViewState extends State<_LoginView> {
           return;
         }
         if (state.isSuccess) {
-          Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+          if (state.needsPin) {
+            // Same pattern as Splash's authenticatedNeedsPin branch:
+            // rootNavigatorKey for the delayed onUnlocked callback
+            // (fires later, after this screen's own context may be
+            // gone), plain context for the immediate replacement below
+            // (still safe -- it runs synchronously in this listener).
+            Navigator.of(context).pushReplacement(MaterialPageRoute(
+              builder: (_) => PinUnlockScreen(
+                onUnlocked: () =>
+                    rootNavigatorKey.currentState?.pushReplacementNamed(AppRoutes.dashboard),
+              ),
+            ));
+          } else if (state.needsSetPin) {
+            // No PIN saved for this account yet -- Quick PIN is now a
+            // required step of logging in (2026-09-25), not something
+            // left for Profile later. SetPinScreen's mandatory mode
+            // (onSetupComplete set) hides its back arrow and can't be
+            // popped, same reasoning as the onUnlocked callback above.
+            Navigator.of(context).pushReplacement(MaterialPageRoute(
+              builder: (_) => SetPinScreen(
+                onSetupComplete: () =>
+                    rootNavigatorKey.currentState?.pushReplacementNamed(AppRoutes.dashboard),
+              ),
+            ));
+          } else {
+            Navigator.of(context).pushReplacementNamed(AppRoutes.dashboard);
+          }
         }
       },
       builder: (context, state) {

@@ -18,6 +18,23 @@ import '../../sales/bloc/sales_history_state.dart';
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 final _timeFormat = DateFormat('h:mm a');
+final _dateTimeFormat = DateFormat('d MMM, h:mm a');
+
+/// Recent Sales' row subtitle -- a flat list with no "Today"/"Yesterday"
+/// section headers to lean on (unlike Sales History, which always shows
+/// the full date+time because its own group header already says which
+/// day), so each row has to say which day itself: just the time for
+/// today ("12:00 PM"), "Yesterday, 12:00 PM" for yesterday, and the
+/// full date for anything older ("12 Sep, 12:00 PM") -- otherwise every
+/// row looked like it happened today, no matter how old the sale was.
+String _recentSaleTimeLabel(DateTime? createdAt) {
+  if (createdAt == null) return 'Just now';
+  final now = DateTime.now();
+  if (_isSameDay(createdAt, now)) return 'Today, ${_timeFormat.format(createdAt)}';
+  final yesterday = now.subtract(const Duration(days: 1));
+  if (_isSameDay(createdAt, yesterday)) return 'Yesterday, ${_timeFormat.format(createdAt)}';
+  return _dateTimeFormat.format(createdAt);
+}
 
 /// Dashboard — matches the CellPoint design canvas (stat grid, quick
 /// actions, recent sales, service queue).
@@ -165,7 +182,7 @@ class _RecentSalesSection extends StatelessWidget {
             iconBg: AppColors.iconTint,
             iconColor: AppColors.accent,
             title: _itemSummary(sale),
-            subtitle: sale.createdAt == null ? 'Just now' : _timeFormat.format(sale.createdAt!),
+            subtitle: _recentSaleTimeLabel(sale.createdAt),
             trailing: _priceFormat.format(sale.total),
           );
         }).toList();
