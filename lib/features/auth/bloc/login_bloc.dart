@@ -22,17 +22,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     on<BranchSelected>(_onBranchSelected);
   }
 
-  /// Three-way result, not a plain bool (2026-09-25, once Quick PIN
-  /// became required rather than optional): `true`/`false` are a
-  /// confirmed read, `null` means the read itself failed (Firestore
-  /// hiccup, rules not published, etc.). That distinction matters now
-  /// -- treating a failed read as "confirmed no PIN" would force
-  /// someone straight into the mandatory Set-PIN screen at the exact
-  /// moment Firestore is unreachable, where the `setPin` write would
-  /// likely fail too and strand them with no way forward (mandatory
-  /// mode has no back button). `null` is handled by both callers below
-  /// as "fail open, skip the PIN step entirely" -- same safe fallback
-  /// SplashBloc uses for the same reason.
+
   Future<bool?> _hasPinSafe(String uid) async {
     try {
       return await _pinRepository.hasPin(uid);
@@ -51,31 +41,13 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
 
     emit(state.copyWith(isSubmitting: true, clearError: true));
 
-    // Firebase Auth only understands email addresses, but the Login
-    // screen only ever asks for a "username" — so we turn that username
-    // into a fixed-format email behind the scenes before talking to
-    // Firebase. The person never sees or types "@4bmobiles.app"
-    // anywhere; as far as they're concerned they just have a username.
     final email = '${event.username.trim()}@4bmobiles.app';
 
     try {
       final credential =
           await _auth.signInWithEmailAndPassword(email: email, password: event.password);
 
-      // A fresh explicit login is exactly the case Splash can never
-      // see (uninstalling the app, or just signing all the way out,
-      // wipes the locally-persisted Firebase session, so next time
-      // it's this flow that runs, not Splash's cold-start check) --
-      // without this, an account that set a Quick PIN earlier would
-      // never be asked for it after a full re-login, which is the gap
-      // that was reported.
-      //
-      // Quick PIN is now REQUIRED, not optional (2026-09-25): an
-      // account with no PIN yet doesn't just fall through to Dashboard
-      // any more, it's sent to set one (needsSetPin) -- see
-      // LoginScreen's listener. `clearPin` is also now called on
-      // logout (ProfileScreen._logOut), so this is the path that runs
-      // again every time someone logs back in after logging out.
+
       final uid = credential.user?.uid;
       final pinStatus = uid == null ? null : await _hasPinSafe(uid);
 
