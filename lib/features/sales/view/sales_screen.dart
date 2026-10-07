@@ -7,6 +7,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../product_requests/view/add_request_screen.dart';
 import '../bloc/sales_bloc.dart';
 import '../bloc/sales_event.dart';
 import '../bloc/sales_state.dart';
@@ -660,6 +661,28 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                                                 ),
                                               ],
                                             ),
+                                            // Truly out of stock (not just "all of it is
+                                            // already in the cart") -- offer to save who's
+                                            // waiting for it. Added 2026-10-07.
+                                            if (product.stockQty <= 0) ...[
+                                              const SizedBox(height: 6),
+                                              GestureDetector(
+                                                onTap: () {
+                                                  final selected = context.read<SalesBloc>().state.selectedCustomer;
+                                                  Navigator.of(context).push(MaterialPageRoute(
+                                                    builder: (_) => AddRequestScreen(
+                                                      productId: product.id,
+                                                      initialItemName: product.name,
+                                                      initialCustomer: selected,
+                                                    ),
+                                                  ));
+                                                },
+                                                child: Text(
+                                                  '+ Save request',
+                                                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.accent),
+                                                ),
+                                              ),
+                                            ],
                                           ],
                                         ),
                                       ],

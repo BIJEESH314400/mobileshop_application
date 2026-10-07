@@ -7,6 +7,7 @@ import '../../features/customers/view/customers_screen.dart';
 import '../../features/dashboard/view/dashboard_screen.dart';
 import '../../features/products/view/add_product_screen.dart';
 import '../../features/products/view/products_screen.dart';
+import '../../features/product_requests/view/product_requests_screen.dart';
 import '../../features/profile/view/add_employee_screen.dart';
 import '../../features/profile/view/profile_screen.dart';
 import '../../features/profile/view/staff_management_screen.dart';
@@ -34,6 +35,7 @@ class AppRoutes {
   static const profile = '/profile';
   static const staffManagement = '/staff-management';
   static const addEmployee = '/add-employee';
+  static const productRequests = '/product-requests';
 
   static Map<String, WidgetBuilder> routes = {
     splash: (_) => const SplashScreen(),
@@ -51,5 +53,6 @@ class AppRoutes {
     profile: (_) => const ProfileScreen(),
     staffManagement: (_) => const StaffManagementScreen(),
     addEmployee: (_) => const AddEmployeeScreen(),
+    productRequests: (_) => const ProductRequestsScreen(),
   };
 }

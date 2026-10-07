@@ -20,11 +20,16 @@ import '../../../core/widgets/confirm_delete_dialog.dart';
 /// all present in the reference but not part of this app's data model);
 /// add a Review step before Save.
 ///
-/// Reached only from the Customers screen's own "Add Customer" button
-/// (see AppRoutes.addCustomer); the Sales checkout's quick "+ New"
-/// customer shortcut deliberately keeps using the smaller, faster
-/// `showAddCustomerSheet` bottom sheet instead -- this bigger form is
-/// too slow to open mid-sale.
+/// Reached from the Customers screen's own "Add Customer" button (see
+/// AppRoutes.addCustomer), from editing an existing customer, and
+/// (2026-10-07) from the shared customer picker sheet's own "+New"
+/// link (Sales/Service Jobs/Add Request) -- pushed on top of that
+/// sheet so returning here pops straight back into it. Because of that
+/// last caller, `_save()` pops the full saved `Customer` (not just a
+/// bare `true`) so the picker sheet can fold the brand-new customer
+/// straight into its own list and mark it selected; callers that only
+/// ever awaited a bare bool still work unchanged, since they never
+/// read the popped value.
 ///
 /// Personal Details (name, mobile) is the only step with hard-required
 /// fields -- Location, Business/GST and Notes are entirely optional, so
@@ -212,7 +217,7 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
     final altMobile = _altMobileCtrl.text.trim();
     final isEditing = widget.customer != null;
     try {
-      final customer = Customer(
+      var customer = Customer(
         id: widget.customer?.id ?? '', // Firestore assigns the id for a new customer -- see addCustomer below.
         shopId: currentShopId,
         name: _nameCtrl.text.trim(),
@@ -231,13 +236,38 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
       if (isEditing) {
         await CustomerRepository().updateCustomer(customer.id, customer);
       } else {
-        await CustomerRepository().addCustomer(customer);
+        // Firestore assigns the id on insert -- fold it back into the
+        // local `customer` so the screen can hand the *complete* saved
+        // customer (with a real id, not '') back to whoever pushed this
+        // screen. The customer picker sheet's "+New" flow needs this to
+        // re-select the just-created customer once it returns here.
+        final newId = await CustomerRepository().addCustomer(customer);
+        customer = Customer(
+          id: newId,
+          shopId: customer.shopId,
+          name: customer.name,
+          phone: customer.phone,
+          altPhone: customer.altPhone,
+          email: customer.email,
+          address: customer.address,
+          city: customer.city,
+          state: customer.state,
+          pincode: customer.pincode,
+          landmark: customer.landmark,
+          businessName: customer.businessName,
+          gstNumber: customer.gstNumber,
+          notes: customer.notes,
+        );
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(SnackBar(content: Text(isEditing ? 'Customer updated' : 'Customer saved')));
-      Navigator.of(context).pop(true);
+      // Pops the full saved Customer (not just `true`) so callers that
+      // need it -- e.g. the customer picker sheet's "+New" -- can use
+      // it directly. Existing callers that only awaited a bare bool
+      // still work fine, since they never read the popped value.
+      Navigator.of(context).pop(customer);
     } catch (e, st) {
       AppLogger.error('AddCustomerScreen._save', e, st);
       if (!mounted) return;
@@ -298,6 +328,14 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
               onBack: _previousStep,
               isEditing: widget.customer != null,
               onDelete: widget.customer != null ? _confirmDelete : null,
+              // Quick-submit tick (2026-10-07): once the only hard-required
+              // fields (name + mobile) are valid, save works from any step,
+              // not just after walking through Location/Business/Review --
+              // `_save()` already re-validates and safely bounces back to
+              // Personal if something's wrong, so this is just a faster
+              // door into the same save path, not a separate one.
+              canQuickSave: _personalDetailsComplete,
+              onQuickSave: _save,
             ),
             _StepIndicator(
               palette: p,
@@ -504,6 +542,8 @@ class _Header extends StatelessWidget {
   final VoidCallback onBack;
   final bool isEditing;
   final VoidCallback? onDelete;
+  final bool canQuickSave;
+  final VoidCallback onQuickSave;
 
   const _Header({
     required this.palette,
@@ -513,6 +553,8 @@ class _Header extends StatelessWidget {
     required this.onBack,
     required this.isEditing,
     this.onDelete,
+    required this.canQuickSave,
+    required this.onQuickSave,
   });
 
   @override
@@ -557,6 +599,33 @@ class _Header extends StatelessWidget {
                 child: const Icon(Icons.delete_outline_rounded, size: 19, color: AppColors.danger),
               ),
             ),
+          if (onDelete != null) const SizedBox(width: 8),
+          // Quick-submit tick -- lets someone who's only filled in
+          // Personal Details (the only hard-required step) save right
+          // away without stepping through Location/Business/Review.
+          // Stays tappable throughout; `_save()` itself bounces back to
+          // Personal with the usual required-field message if it's not
+          // actually ready yet, so this never silently does nothing.
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: saving ? null : onQuickSave,
+            child: Container(
+              width: 36,
+              height: 36,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: canQuickSave ? AppColors.accent : palette.border.withOpacity(0.5),
+                shape: BoxShape.circle,
+              ),
+              child: saving
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(palette.textSecondary)),
+                    )
+                  : Icon(Icons.check_rounded, size: 19, color: canQuickSave ? Colors.white : palette.textSecondary),
+            ),
+          ),
         ],
       ),
     );

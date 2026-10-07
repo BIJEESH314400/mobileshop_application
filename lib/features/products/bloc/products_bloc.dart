@@ -13,6 +13,7 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
       : _repository = repository ?? ProductRepository(),
         super(const ProductsState()) {
     on<ProductsSubscriptionRequested>(_onSubscriptionRequested);
+    on<ProductsSearchChanged>(_onSearchChanged);
   }
 
   Future<void> _onSubscriptionRequested(
@@ -33,5 +34,9 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
         errorMessage: 'Could not load products. Please check your connection and try again.',
       ),
     );
+  }
+
+  void _onSearchChanged(ProductsSearchChanged event, Emitter<ProductsState> emit) {
+    emit(state.copyWith(searchQuery: event.query));
   }
 }

@@ -19,10 +19,12 @@ const int _lowStockThreshold = 5;
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
-/// Products — search bar (visual only) and category pills stay as in
-/// the design canvas, but the list and the category pills themselves
-/// now come from Firestore via ProductsBloc, live-updating whenever a
-/// product is added/changed anywhere.
+/// Products — list and category pills come from Firestore via
+/// ProductsBloc, live-updating whenever a product is added/changed
+/// anywhere. Search box made real 2026-10-07 (matches name/SKU/brand,
+/// same ProductsSearchChanged-into-State.filteredProducts shape as
+/// Customers' own search), and combines with whichever category pill
+/// is selected, same as before.
 class ProductsScreen extends StatelessWidget {
   const ProductsScreen({super.key});
 
@@ -47,6 +49,13 @@ class _ProductsViewState extends State<_ProductsView> {
   // are actually present in the loaded products, so this list grows
   // on its own as new categories get used — no separate config needed.
   String? _selectedCategory;
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,10 +63,14 @@ class _ProductsViewState extends State<_ProductsView> {
 
     return BlocBuilder<ProductsBloc, ProductsState>(
       builder: (context, state) {
+        // Categories pills still come from the full unfiltered list --
+        // searching shouldn't make a pill disappear out from under the
+        // owner mid-type.
         final categories = state.products.map((product) => product.category).toSet().toList()..sort();
+        final searched = state.filteredProducts;
         final products = _selectedCategory == null
-            ? state.products
-            : state.products.where((product) => product.category == _selectedCategory).toList();
+            ? searched
+            : searched.where((product) => product.category == _selectedCategory).toList();
 
         return Scaffold(
           backgroundColor: p.background,
@@ -107,9 +120,19 @@ class _ProductsViewState extends State<_ProductsView> {
                               children: [
                                 Icon(Icons.search_rounded, size: 18, color: p.textSecondary),
                                 const SizedBox(width: 9),
-                                Text(
-                                  'Search products, SKU or brand',
-                                  style: TextStyle(fontSize: 13.5, color: p.textSecondary),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    onChanged: (value) =>
+                                        context.read<ProductsBloc>().add(ProductsSearchChanged(value)),
+                                    style: TextStyle(color: p.textPrimary, fontSize: 13.5),
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      border: InputBorder.none,
+                                      hintText: 'Search products, SKU or brand',
+                                      hintStyle: TextStyle(color: p.textSecondary, fontSize: 13.5),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -200,10 +223,22 @@ class _ProductsViewState extends State<_ProductsView> {
     }
 
     if (products.isEmpty) {
+      String message;
+      if (state.products.isEmpty) {
+        message = 'No products yet — tap + to add one';
+      } else if (state.searchQuery.trim().isNotEmpty) {
+        message = 'No match for "${state.searchQuery.trim()}"';
+      } else {
+        message = 'No products in this category';
+      }
       return Center(
-        child: Text(
-          state.products.isEmpty ? 'No products yet — tap + to add one' : 'No products in this category',
-          style: TextStyle(color: p.textSecondary, fontSize: 14),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: p.textSecondary, fontSize: 14),
+          ),
         ),
       );
     }

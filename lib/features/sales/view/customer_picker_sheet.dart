@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/models/customer.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../customers/view/add_customer_sheet.dart';
+import '../../customers/view/add_customer_screen.dart';
 
 /// Distinguishes "closed without changing anything" (null) from
 /// "explicitly cleared back to walk-in" (`cleared: true`) from "picked
@@ -47,17 +47,37 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
   final _searchController = TextEditingController();
   String _query = '';
 
+  // Local, mutable copies -- seeded from the widget's data but updated
+  // in place when "+New" creates a customer, so the sheet can show it
+  // selected without the caller needing to re-open the sheet with a
+  // fresh customer list.
+  late List<Customer> _customers = widget.customers;
+  late Customer? _selected = widget.selected;
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
+  /// 2026-10-07: "+New" now opens the full Add Customer page (same one
+  /// reached from the Customers screen) instead of the small quick-add
+  /// bottom sheet -- pushing it on top of this sheet's own route means
+  /// that when it saves and pops, this sheet reappears underneath on
+  /// its own. Once it returns with the newly-created customer, that
+  /// customer is folded into this sheet's own list and marked selected
+  /// right here -- the sheet stays open so the person can see and
+  /// confirm it, rather than silently closing the whole picker.
   Future<void> _addNew() async {
-    final created = await showAddCustomerSheet(context);
-    if (created != null && mounted) {
-      Navigator.of(context).pop(CustomerPickerResult(customer: created));
-    }
+    final created = await Navigator.of(context).push<Customer>(
+      MaterialPageRoute(builder: (_) => const AddCustomerScreen()),
+    );
+    if (created == null || !mounted) return;
+    setState(() {
+      _customers = [..._customers.where((c) => c.id != created.id), created]
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      _selected = created;
+    });
   }
 
   @override
@@ -65,8 +85,8 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
     final p = AppPalette.of(context);
     final query = _query.trim().toLowerCase();
     final filtered = query.isEmpty
-        ? widget.customers
-        : widget.customers
+        ? _customers
+        : _customers
             .where((c) => c.name.toLowerCase().contains(query) || c.phone.contains(query))
             .toList();
 
@@ -151,7 +171,7 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                       leading: Icon(Icons.storefront_outlined, color: p.textSecondary),
                       title: Text('Walk-in customer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
                       subtitle: Text('No customer recorded for this sale', style: TextStyle(fontSize: 12, color: p.textSecondary)),
-                      trailing: widget.selected == null ? const Icon(Icons.check_circle_rounded, color: AppColors.accent) : null,
+                      trailing: _selected == null ? const Icon(Icons.check_circle_rounded, color: AppColors.accent) : null,
                       onTap: () => Navigator.of(context).pop(const CustomerPickerResult(cleared: true)),
                     ),
                     Divider(color: p.divider, height: 20),
@@ -159,7 +179,7 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Text(
-                          widget.customers.isEmpty ? 'No customers yet — tap "New" to add one' : 'No match for "$query"',
+                          _customers.isEmpty ? 'No customers yet — tap "New" to add one' : 'No match for "$query"',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontSize: 13, color: p.textSecondary),
                         ),
@@ -174,7 +194,7 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                           ),
                           title: Text(customer.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
                           subtitle: customer.phone.isEmpty ? null : Text(customer.phone, style: TextStyle(fontSize: 12, color: p.textSecondary)),
-                          trailing: widget.selected?.id == customer.id ? const Icon(Icons.check_circle_rounded, color: AppColors.accent) : null,
+                          trailing: _selected?.id == customer.id ? const Icon(Icons.check_circle_rounded, color: AppColors.accent) : null,
                           onTap: () => Navigator.of(context).pop(CustomerPickerResult(customer: customer)),
                         ),
                   ],

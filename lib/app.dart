@@ -4,7 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'core/routes/app_routes.dart';
 import 'core/routes/root_navigator_key.dart';
 import 'core/services/chat_notification_watcher.dart';
-import 'core/services/pin_lock_gate.dart';
+import 'core/services/idle_lock_gate.dart';
 import 'core/theme/app_theme.dart';
 import 'features/theme/bloc/theme_bloc.dart';
 import 'features/theme/bloc/theme_state.dart';
@@ -17,12 +17,14 @@ class MobileShopApp extends StatelessWidget {
   Widget build(BuildContext context) {
     // ThemeBloc lives above MaterialApp so any screen can read/toggle
     // it later — today only the Profile screen's Dark Mode row does.
-    // ChatNotificationWatcher and PinLockGate both sit above MaterialApp
+    // ChatNotificationWatcher and IdleLockGate both sit above MaterialApp
     // so they keep running for the app's whole lifetime, independent of
     // whatever screen is currently on top -- see each one's own doc
-    // comment for what it does. PinLockGate is outermost since it needs
-    // to intercept every app resume regardless of what else is mounted.
-    return PinLockGate(
+    // comment for what it does. IdleLockGate is outermost since its
+    // root Listener needs to see every tap anywhere in the app, and it
+    // needs to intercept every app resume regardless of what else is
+    // mounted.
+    return IdleLockGate(
       child: ChatNotificationWatcher(
         child: BlocProvider(
           create: (_) => ThemeBloc(initialMode: initialThemeMode),

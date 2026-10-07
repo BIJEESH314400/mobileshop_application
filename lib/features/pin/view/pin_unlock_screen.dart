@@ -12,19 +12,31 @@ import 'pin_keypad.dart';
 
 /// A lock screen for an already-signed-in Firebase session -- shown
 /// either right after Splash (cold start, account has a PIN set) or by
-/// PinLockGate (the app was resumed from the background). Either way,
-/// this screen never itself decides success/failure of the Firebase
-/// login -- it only checks a PIN against PinRepository and calls
-/// [onUnlocked], leaving what happens next (replace with Dashboard, or
-/// just pop back to reveal whatever was on screen before) to the
-/// caller, since that differs between the two entry points.
+/// IdleLockGate (5 minutes of real inactivity, foreground or
+/// background). Either way, this screen never itself decides
+/// success/failure of the Firebase login -- it only checks a PIN
+/// against PinRepository and calls [onUnlocked], leaving what happens
+/// next (replace with Dashboard, or just pop back to reveal whatever
+/// was on screen before) to the caller, since that differs between
+/// the two entry points.
 ///
 /// `canPop: false` below deliberately blocks the Android back
 /// gesture/button from dismissing this screen -- same as a real phone
 /// lock screen, back should do nothing here, not skip the PIN.
 class PinUnlockScreen extends StatefulWidget {
   final VoidCallback onUnlocked;
-  const PinUnlockScreen({super.key, required this.onUnlocked});
+
+  /// True when this screen was reached because the 5-minute idle
+  /// timeout fired -- either live (IdleLockGate) or discovered on a
+  /// cold start after the OS fully killed the app while it was already
+  /// past that timeout (see IdleLockGate.wasIdleTooLong, checked by
+  /// SplashScreen). Swaps the subtitle from a plain "welcome back" to
+  /// an explicit "you were logged out due to inactivity" so the alert
+  /// IdleLockGate showed isn't the only place that explanation appears
+  /// -- a cold start after a kill never saw that dialog at all.
+  final bool inactivityMessage;
+
+  const PinUnlockScreen({super.key, required this.onUnlocked, this.inactivityMessage = false});
 
   @override
   State<PinUnlockScreen> createState() => _PinUnlockScreenState();
@@ -77,7 +89,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
       _forceFullLogin();
       return;
     }
-    // Same reasoning as SplashBloc/PinLockGate: a Firestore hiccup
+    // Same reasoning as SplashBloc/IdleLockGate: a Firestore hiccup
     // here must not leave _checking stuck true forever -- that would
     // freeze the keypad with no error and no way to retry, on the one
     // screen standing between a signed-in user and Dashboard. Treated
@@ -177,7 +189,10 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
                       Text(greeting, style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: palette.textPrimary)),
                       const SizedBox(height: 6),
                       Text(
-                        'Enter your PIN to continue',
+                        widget.inactivityMessage
+                            ? "You were logged out due to inactivity. Enter your PIN to continue."
+                            : 'Enter your PIN to continue',
+                        textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 13, color: palette.textSecondary, fontWeight: FontWeight.w500),
                       ),
                       const SizedBox(height: 30),

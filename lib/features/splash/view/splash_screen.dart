@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/routes/app_routes.dart';
 import '../../../core/routes/root_navigator_key.dart';
+import '../../../core/services/idle_lock_gate.dart';
 import '../../pin/view/pin_unlock_screen.dart';
 import '../../pin/view/set_pin_screen.dart';
 import '../../../core/theme/app_colors.dart';
@@ -36,11 +37,22 @@ class SplashScreen extends StatelessWidget {
           } else if (status == AuthStatus.authenticated) {
             navigator.pushReplacementNamed(AppRoutes.dashboard);
           } else if (status == AuthStatus.authenticatedNeedsPin) {
-            navigator.pushReplacement(MaterialPageRoute(
-              builder: (_) => PinUnlockScreen(
-                onUnlocked: () => rootNavigatorKey.currentState?.pushReplacementNamed(AppRoutes.dashboard),
-              ),
-            ));
+            // A true cold start always asks for the PIN regardless of
+            // idle time -- but if the saved activity timestamp shows
+            // the 5-minute idle budget was ALSO blown while this
+            // process wasn't even alive (backgrounded, then killed by
+            // the OS), show the same "logged out due to inactivity"
+            // wording IdleLockGate's own live alert uses, rather than
+            // a plain "welcome back" that never explained why they're
+            // here. See IdleLockGate.wasIdleTooLong.
+            IdleLockGate.wasIdleTooLong().then((wasIdle) {
+              rootNavigatorKey.currentState?.pushReplacement(MaterialPageRoute(
+                builder: (_) => PinUnlockScreen(
+                  inactivityMessage: wasIdle,
+                  onUnlocked: () => rootNavigatorKey.currentState?.pushReplacementNamed(AppRoutes.dashboard),
+                ),
+              ));
+            });
           } else if (status == AuthStatus.authenticatedNeedsSetPin) {
             // Signed in, but no PIN saved -- only reachable in the
             // normal flow if the app was killed mid-setup (see

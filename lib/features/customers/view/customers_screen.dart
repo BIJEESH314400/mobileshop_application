@@ -54,11 +54,13 @@ class _CustomersViewState extends State<_CustomersView> {
   }
 
   Future<void> _addCustomer(BuildContext context) async {
-    // 2026-09-25: the Customers screen's own "Add Customer" button now
-    // opens the bigger full-page form (AddCustomerScreen) instead of
-    // the small `showAddCustomerSheet` bottom sheet -- that sheet is
-    // now only used by the Sales checkout's quick "+ New" shortcut,
-    // which needs to stay fast mid-sale.
+    // 2026-09-25: the Customers screen's own "Add Customer" button
+    // opens the bigger full-page form (AddCustomerScreen) rather than
+    // a quick-add bottom sheet. (2026-10-07: the shared customer
+    // picker sheet's own "+New" -- Sales/Service Jobs/Add Request --
+    // also switched to this same full page, so the small quick-add
+    // sheet that used to live at `add_customer_sheet.dart` is no
+    // longer used anywhere and has been moved to _to_delete/.)
     await Navigator.of(context).pushNamed(AppRoutes.addCustomer);
     // No explicit refresh needed -- CustomersBloc's live stream picks
     // up the new document on its own, same as every other live list

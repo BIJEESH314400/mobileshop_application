@@ -14,3 +14,13 @@ sealed class ProductsEvent extends Equatable {
 class ProductsSubscriptionRequested extends ProductsEvent {
   const ProductsSubscriptionRequested();
 }
+
+/// Raw text typed into the search bar -- same shape as
+/// CustomersSearchChanged.
+class ProductsSearchChanged extends ProductsEvent {
+  final String query;
+  const ProductsSearchChanged(this.query);
+
+  @override
+  List<Object?> get props => [query];
+}

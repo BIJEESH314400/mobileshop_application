@@ -11,7 +11,7 @@ import 'package:crypto/crypto.dart';
 ///
 /// The PIN is NEVER a replacement for the real Firebase Auth login --
 /// it only re-gates access to a session that's ALREADY signed in (see
-/// PinLockGate / PinUnlockScreen), so a salted SHA-256 hash is enough
+/// IdleLockGate / PinUnlockScreen), so a salted SHA-256 hash is enough
 /// here; nothing sensitive is protected by the PIN on its own, only by
 /// Firebase Auth + the Firestore rules that were already built.
 class PinRepository {

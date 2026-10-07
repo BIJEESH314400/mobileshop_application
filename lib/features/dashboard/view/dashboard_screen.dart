@@ -20,6 +20,9 @@ import '../../sales/bloc/sales_history_state.dart';
 import '../../products/bloc/products_bloc.dart';
 import '../../products/bloc/products_event.dart';
 import '../../products/bloc/products_state.dart';
+import '../../product_requests/bloc/product_requests_bloc.dart';
+import '../../product_requests/bloc/product_requests_event.dart';
+import '../../product_requests/bloc/product_requests_state.dart';
 import '../../profile/bloc/current_user_bloc.dart';
 import '../../profile/bloc/current_user_event.dart';
 import '../../profile/bloc/current_user_state.dart';
@@ -75,6 +78,7 @@ class DashboardScreen extends StatelessWidget {
         BlocProvider(create: (_) => ServiceBloc()..add(const ServiceSubscriptionRequested())),
         BlocProvider(create: (_) => CurrentUserBloc()..add(const CurrentUserRequested())),
         BlocProvider(create: (_) => ProductsBloc()..add(const ProductsSubscriptionRequested())),
+        BlocProvider(create: (_) => ProductRequestsBloc()..add(const ProductRequestsSubscriptionRequested())),
       ],
       child: Scaffold(
         backgroundColor: p.background,
@@ -319,6 +323,17 @@ class _Header extends StatelessWidget {
                   );
                 },
               ),
+              const SizedBox(width: 10),
+              BlocBuilder<ProductRequestsBloc, ProductRequestsState>(
+                builder: (context, state) {
+                  return _IconButton(
+                    palette: palette,
+                    icon: Icons.bookmark_add_outlined,
+                    badgeCount: state.requests.length,
+                    onTap: () => Navigator.of(context).pushNamed(AppRoutes.productRequests),
+                  );
+                },
+              ),
             ],
           ),
         ],
@@ -346,8 +361,19 @@ class _IconButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool showDot;
+  /// When > 0, shows a small numbered badge instead of the plain dot --
+  /// used by the "Waiting Customers" icon (added 2026-10-07) so staff
+  /// see how many without opening the list, same spot/style the
+  /// notifications bell's dot already uses.
+  final int badgeCount;
 
-  const _IconButton({required this.palette, required this.icon, required this.onTap, this.showDot = false});
+  const _IconButton({
+    required this.palette,
+    required this.icon,
+    required this.onTap,
+    this.showDot = false,
+    this.badgeCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -378,6 +404,25 @@ class _IconButton extends StatelessWidget {
                   color: AppColors.danger,
                   shape: BoxShape.circle,
                   border: Border.all(color: palette.card, width: 1.5),
+                ),
+              ),
+            ),
+          if (badgeCount > 0)
+            Positioned(
+              top: -5,
+              right: -5,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+                constraints: const BoxConstraints(minWidth: 17),
+                decoration: BoxDecoration(
+                  color: AppColors.danger,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: palette.card, width: 1.5),
+                ),
+                child: Text(
+                  badgeCount > 9 ? '9+' : '$badgeCount',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.white),
                 ),
               ),
             ),
