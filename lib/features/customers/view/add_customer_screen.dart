@@ -6,6 +6,7 @@ import '../../../core/repositories/customer_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/widgets/confirm_delete_dialog.dart';
 
 /// Full-page "Add Customer" form -- a 4-step wizard (Personal -> Location
 /// -> Business -> Review), redesigned 2026-10-01 from the original
@@ -43,7 +44,14 @@ import '../../../core/utils/app_logger.dart';
 /// live as the person types -- same idea as the Pincode/GST format
 /// warnings already had, just extended to the two required fields.
 class AddCustomerScreen extends StatefulWidget {
-  const AddCustomerScreen({super.key});
+  /// When non-null, the form opens pre-filled with this customer's data
+  /// and Save updates their existing document instead of creating a new
+  /// one -- same "reuse the same form for add vs. edit" pattern Add
+  /// Product already uses (`AddProductScreen(product: ...)`), added
+  /// 2026-10-06.
+  final Customer? customer;
+
+  const AddCustomerScreen({super.key, this.customer});
 
   @override
   State<AddCustomerScreen> createState() => _AddCustomerScreenState();
@@ -73,6 +81,7 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
   bool _personalAttempted = false;
 
   bool _saving = false;
+  bool _deleting = false;
   String? _error;
 
   static final _gstinPattern = RegExp(r'^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$');
@@ -95,6 +104,26 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
   @override
   void initState() {
     super.initState();
+    final existing = widget.customer;
+    if (existing != null) {
+      _nameCtrl.text = existing.name;
+      _mobileCtrl.text = _stripCountryCode(existing.phone);
+      _altMobileCtrl.text = _stripCountryCode(existing.altPhone);
+      _emailCtrl.text = existing.email;
+      _addressCtrl.text = existing.address;
+      _cityCtrl.text = existing.city;
+      _stateCtrl.text = existing.state;
+      _pincodeCtrl.text = existing.pincode;
+      _landmarkCtrl.text = existing.landmark;
+      _businessNameCtrl.text = existing.businessName;
+      _gstCtrl.text = existing.gstNumber;
+      _notesCtrl.text = existing.notes;
+      // An existing customer's data is presumably already valid, so
+      // there's no reason to make the person step through Personal ->
+      // Location -> Business in order just to fix one field -- every
+      // step circle is tappable right away.
+      _maxStepReached = 3;
+    }
     // Re-render as the person types so the status badges, green check
     // marks, and inline required/format warnings all update live, not
     // just after tapping Continue/Save.
@@ -102,6 +131,8 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
       c.addListener(_onFormChanged);
     }
   }
+
+  static String _stripCountryCode(String phone) => phone.startsWith('+91') ? phone.substring(3) : phone;
 
   void _onFormChanged() => setState(() {});
 
@@ -179,9 +210,10 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
     });
     final mobile = _mobileCtrl.text.trim();
     final altMobile = _altMobileCtrl.text.trim();
+    final isEditing = widget.customer != null;
     try {
       final customer = Customer(
-        id: '', // Firestore assigns the real id -- see addCustomer below.
+        id: widget.customer?.id ?? '', // Firestore assigns the id for a new customer -- see addCustomer below.
         shopId: currentShopId,
         name: _nameCtrl.text.trim(),
         phone: '+91$mobile',
@@ -196,11 +228,15 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
         gstNumber: _gstCtrl.text.trim().toUpperCase(),
         notes: _notesCtrl.text.trim(),
       );
-      await CustomerRepository().addCustomer(customer);
+      if (isEditing) {
+        await CustomerRepository().updateCustomer(customer.id, customer);
+      } else {
+        await CustomerRepository().addCustomer(customer);
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('Customer saved')));
+        ..showSnackBar(SnackBar(content: Text(isEditing ? 'Customer updated' : 'Customer saved')));
       Navigator.of(context).pop(true);
     } catch (e, st) {
       AppLogger.error('AddCustomerScreen._save', e, st);
@@ -208,6 +244,39 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
       setState(() {
         _saving = false;
         _error = "Couldn't save — check your connection and try again";
+      });
+    }
+  }
+
+  Future<void> _confirmDelete() async {
+    final customer = widget.customer;
+    if (customer == null) return;
+    final confirmed = await ConfirmDeleteDialog.show(
+      context,
+      title: 'Delete this customer permanently?',
+      message: "This can't be undone. Their past orders stay on record, just no longer linked to a saved customer.",
+      confirmLabel: 'Yes, Delete Customer',
+      cancelLabel: 'Keep Customer',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() {
+      _deleting = true;
+      _error = null;
+    });
+    try {
+      await CustomerRepository().deleteCustomer(customer.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Customer deleted')));
+      Navigator.of(context).pop(true);
+    } catch (e, st) {
+      AppLogger.error('AddCustomerScreen._confirmDelete', e, st);
+      if (!mounted) return;
+      setState(() {
+        _deleting = false;
+        _error = "Couldn't delete — check your connection and try again";
       });
     }
   }
@@ -221,7 +290,15 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            _Header(palette: p, stepIndex: _step, stepTitles: _stepTitles, saving: _saving, onBack: _previousStep),
+            _Header(
+              palette: p,
+              stepIndex: _step,
+              stepTitles: _stepTitles,
+              saving: _saving || _deleting,
+              onBack: _previousStep,
+              isEditing: widget.customer != null,
+              onDelete: widget.customer != null ? _confirmDelete : null,
+            ),
             _StepIndicator(
               palette: p,
               stepTitles: _stepTitles,
@@ -233,7 +310,8 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
             _BottomBar(
               palette: p,
               step: _step,
-              saving: _saving,
+              saving: _saving || _deleting,
+              isEditing: widget.customer != null,
               onPrevious: _previousStep,
               onContinuePersonal: _continueFromPersonal,
               onContinueLocation: _continueFromLocation,
@@ -424,6 +502,8 @@ class _Header extends StatelessWidget {
   final List<String> stepTitles;
   final bool saving;
   final VoidCallback onBack;
+  final bool isEditing;
+  final VoidCallback? onDelete;
 
   const _Header({
     required this.palette,
@@ -431,6 +511,8 @@ class _Header extends StatelessWidget {
     required this.stepTitles,
     required this.saving,
     required this.onBack,
+    required this.isEditing,
+    this.onDelete,
   });
 
   @override
@@ -439,6 +521,7 @@ class _Header extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
       decoration: BoxDecoration(color: palette.background, border: Border(bottom: BorderSide(color: palette.border))),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -446,17 +529,34 @@ class _Header extends StatelessWidget {
             child: Icon(Icons.arrow_back_rounded, size: 20, color: palette.textPrimary),
           ),
           const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Add Customer', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: palette.textPrimary)),
-              const SizedBox(height: 2),
-              Text(
-                'STEP ${stepIndex + 1} OF ${stepTitles.length}: ${stepTitles[stepIndex].toUpperCase()}',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 0.4),
-              ),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isEditing ? 'Edit Customer' : 'Add Customer',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: palette.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'STEP ${stepIndex + 1} OF ${stepTitles.length}: ${stepTitles[stepIndex].toUpperCase()}',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 0.4),
+                ),
+              ],
+            ),
           ),
+          if (onDelete != null)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: saving ? null : onDelete,
+              child: Container(
+                width: 36,
+                height: 36,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.danger.withOpacity(0.1), shape: BoxShape.circle),
+                child: const Icon(Icons.delete_outline_rounded, size: 19, color: AppColors.danger),
+              ),
+            ),
         ],
       ),
     );
@@ -656,6 +756,7 @@ class _BottomBar extends StatelessWidget {
   final AppPalette palette;
   final int step;
   final bool saving;
+  final bool isEditing;
   final VoidCallback onPrevious;
   final VoidCallback onContinuePersonal;
   final VoidCallback onContinueLocation;
@@ -666,6 +767,7 @@ class _BottomBar extends StatelessWidget {
     required this.palette,
     required this.step,
     required this.saving,
+    required this.isEditing,
     required this.onPrevious,
     required this.onContinuePersonal,
     required this.onContinueLocation,
@@ -707,7 +809,7 @@ class _BottomBar extends StatelessWidget {
       default:
         leftLabel = 'Back to Business';
         leftIcon = Icons.arrow_back_rounded;
-        rightLabel = 'Save & Create Customer';
+        rightLabel = isEditing ? 'Save Changes' : 'Save & Create Customer';
         rightIcon = Icons.check_rounded;
         rightOnTap = saving ? null : onSave;
         break;

@@ -105,35 +105,6 @@ class _SalesViewState extends State<_SalesView> {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 14),
-                        Container(
-                          height: 48,
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          decoration: BoxDecoration(
-                            color: p.card,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: p.border),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.person_outline_rounded, size: 18, color: AppColors.accent),
-                              const SizedBox(width: 9),
-                              Expanded(
-                                child: Text(
-                                  'Walk-in Customer',
-                                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: p.textPrimary),
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () => _comingSoon(context, 'Change customer'),
-                                child: const Text(
-                                  'Change',
-                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       ],
                     ),
                   ),

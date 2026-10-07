@@ -120,6 +120,7 @@ class _ProductsViewState extends State<_ProductsView> {
                               height: 34,
                               child: ListView(
                                 scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.only(right: 20),
                                 children: [
                                   _FilterPill(
                                     palette: p,
@@ -128,7 +129,7 @@ class _ProductsViewState extends State<_ProductsView> {
                                     onTap: () => setState(() => _selectedCategory = null),
                                   ),
                                   for (final category in categories) ...[
-                                    const SizedBox(width: 8),
+                                    const SizedBox(width: 6),
                                     _FilterPill(
                                       palette: p,
                                       label: category,
@@ -238,9 +239,22 @@ class _FilterPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        onTap();
+        // Scroll the tapped pill fully into view -- previously a pill
+        // sitting at the scrolled-away edge (e.g. the last category)
+        // stayed partially cut off even after being selected, so the
+        // selection itself gave no feedback unless the user also
+        // scrolled manually. Scheduled for the next frame so this runs
+        // after onTap()'s setState has rebuilt the row.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            Scrollable.ensureVisible(context, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+          }
+        });
+      },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: selected ? AppColors.accent : palette.card,

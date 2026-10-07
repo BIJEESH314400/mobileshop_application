@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -10,11 +11,28 @@ import 'splash_state.dart';
 /// an Event comes in -> `on<Event>` handler runs -> `emit()`s a new State.
 class SplashBloc extends Bloc<SplashEvent, AuthStatus> {
   final PinRepository _pinRepository;
+  final FirebaseFirestore _db;
 
-  SplashBloc({PinRepository? pinRepository})
+  SplashBloc({PinRepository? pinRepository, FirebaseFirestore? firestore})
       : _pinRepository = pinRepository ?? PinRepository(),
+        _db = firestore ?? FirebaseFirestore.instance,
         super(AuthStatus.checking) {
     on<SplashStarted>(_onStarted);
+  }
+
+  /// Same fail-open-on-hiccup reasoning as the PIN check below -- a
+  /// confirmed "disabled" blocks the resume, but a network blip reading
+  /// it does not strand a legitimate, still-active employee on the
+  /// splash screen. Added 2026-10-06 alongside the employee
+  /// delete/remove feature -- see EmployeeRepository.setDisabled.
+  Future<bool> _isDisabledEmployee(String uid) async {
+    try {
+      final doc = await _db.collection('employees').doc(uid).get();
+      return doc.data()?['disabled'] == true;
+    } catch (e, st) {
+      AppLogger.error('SplashBloc._isDisabledEmployee', e, st);
+      return false;
+    }
   }
 
   Future<void> _onStarted(SplashStarted event, Emitter<AuthStatus> emit) async {
@@ -30,6 +48,16 @@ class SplashBloc extends Bloc<SplashEvent, AuthStatus> {
     await Future.delayed(const Duration(milliseconds: 700));
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      emit(AuthStatus.unauthenticated);
+      return;
+    }
+    // A previously-signed-in employee who was removed since their last
+    // session must not get a free pass back in just because their
+    // device still has a live Firebase Auth session -- same enforcement
+    // LoginBloc applies to a fresh sign-in, applied here too since
+    // Splash's auto-login otherwise skips Login entirely.
+    if (await _isDisabledEmployee(user.uid)) {
+      await FirebaseAuth.instance.signOut();
       emit(AuthStatus.unauthenticated);
       return;
     }

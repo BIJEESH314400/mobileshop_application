@@ -52,4 +52,10 @@ class ProductRepository {
     final data = product.toMap()..remove('createdAt');
     return _products.doc(id).update(data);
   }
+
+  /// Permanently removes a product. There's no undo -- the caller is
+  /// responsible for confirming with the person first.
+  Future<void> deleteProduct(String id) {
+    return _products.doc(id).delete();
+  }
 }

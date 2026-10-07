@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/models/customer.dart';
 import '../../../core/models/sale.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/utils/app_logger.dart';
 import '../bloc/customers_bloc.dart';
 import '../bloc/customers_event.dart';
 import '../bloc/customers_state.dart';
+import 'add_customer_screen.dart';
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 final _dateFormat = DateFormat('d MMM, h:mm a');
@@ -60,6 +63,38 @@ class _CustomersViewState extends State<_CustomersView> {
     // No explicit refresh needed -- CustomersBloc's live stream picks
     // up the new document on its own, same as every other live list
     // in this app.
+  }
+
+  /// 2026-10-06: edit an existing customer. Pushed directly with the
+  /// `customer` constructor arg rather than through a named route --
+  /// same convention `ProductsScreen` already uses for Edit Product
+  /// (`AddProductScreen(product: product)`), since a named route can't
+  /// carry a non-primitive argument like this cleanly. Reached from the
+  /// small pencil icon on each row, not the row's own tap target, which
+  /// stays wired to opening order history exactly as before.
+  Future<void> _editCustomer(BuildContext context, Customer customer) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddCustomerScreen(customer: customer)));
+    // Same reasoning as _addCustomer above -- the live stream picks up
+    // an edited document on its own, no explicit refresh needed.
+  }
+
+  /// 2026-10-06: tap-to-call on each Customers row, matching the
+  /// reference design's phone icon. A brand-new capability -- nothing
+  /// in this app launched a phone dialer before, so this is the first
+  /// use of `url_launcher` -- opens the device's own dialer pre-filled
+  /// with the customer's stored +91 number, same as any "Call" link
+  /// anywhere else on the phone; it doesn't place the call itself.
+  Future<void> _callCustomer(BuildContext context, Customer customer) async {
+    try {
+      final launched = await launchUrl(Uri(scheme: 'tel', path: customer.phone));
+      if (!launched) throw Exception('launchUrl returned false for tel:\${customer.phone}');
+    } catch (e, st) {
+      AppLogger.error('CustomersScreen._callCustomer', e, st);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text("Couldn't open the dialer")));
+    }
   }
 
   @override
@@ -157,9 +192,10 @@ class _CustomersViewState extends State<_CustomersView> {
                         palette: p,
                         customer: customer,
                         orderCount: state.orderCountFor(customer.id),
-                        totalSpent: state.totalSpentFor(customer.id),
                         isVip: state.isVip(customer.id),
                         onTap: () => _openOrderHistory(context, p, customer, state.salesFor(customer.id)),
+                        onEdit: () => _editCustomer(context, customer),
+                        onCall: () => _callCustomer(context, customer),
                       );
                     },
                   );
@@ -202,25 +238,57 @@ class _CustomersViewState extends State<_CustomersView> {
   }
 }
 
+/// Row redesigned 2026-10-06 to match a reference screenshot the user
+/// shared: a top line (avatar, name, phone, a tap-to-call button) and a
+/// second line below it (an order-count pill, "Edit", the chevron) --
+/// replacing the old single-row layout that showed total spent on the
+/// right and a gold "VIP" badge next to the name. Confirmed with the
+/// user via AskUserQuestion before building: the call icon is wired to
+/// a real phone dialer (not decorative), the old VIP badge is dropped
+/// in favor of a colored order-count pill (still driven by
+/// CustomersState.isVip/vipOrderThreshold under the hood, just shown
+/// as a color instead of a separate label), and "Total spent" is no
+/// longer shown here -- it's still shown inside the order-history sheet
+/// (_CustomerOrdersSheet) when a row is tapped.
 class _CustomerRow extends StatelessWidget {
   final AppPalette palette;
   final Customer customer;
   final int orderCount;
-  final double totalSpent;
   final bool isVip;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onCall;
 
   const _CustomerRow({
     required this.palette,
     required this.customer,
     required this.orderCount,
-    required this.totalSpent,
     required this.isVip,
     required this.onTap,
+    required this.onEdit,
+    required this.onCall,
   });
 
   @override
   Widget build(BuildContext context) {
+    final hasPhone = customer.phone.isNotEmpty;
+
+    // 0 orders -> neutral grey, 1+ -> blue, VIP threshold (5+, from
+    // CustomersState) -> green. Reuses the same threshold the old VIP
+    // badge used, just expressed as a pill color instead of a label.
+    final Color badgeBg;
+    final Color badgeText;
+    if (orderCount == 0) {
+      badgeBg = AppColors.neutralBg;
+      badgeText = AppColors.neutralText;
+    } else if (isVip) {
+      badgeBg = AppColors.successBg;
+      badgeText = AppColors.success;
+    } else {
+      badgeBg = AppColors.infoBg;
+      badgeText = AppColors.info;
+    }
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -230,64 +298,92 @@ class _CustomerRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: palette.border),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.12), shape: BoxShape.circle),
-              child: Text(customer.initials, style: const TextStyle(color: AppColors.accent, fontSize: 15, fontWeight: FontWeight.w700)),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.12), shape: BoxShape.circle),
+                  child: Text(customer.initials, style: const TextStyle(color: AppColors.accent, fontSize: 15, fontWeight: FontWeight.w700)),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Flexible(
-                        child: Text(
-                          customer.name,
-                          style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: palette.textPrimary),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                      Text(
+                        customer.name,
+                        style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: palette.textPrimary),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      if (isVip) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(color: AppColors.warningBg, borderRadius: BorderRadius.circular(6)),
-                          child: const Text('VIP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: AppColors.warningText)),
-                        ),
-                      ],
+                      const SizedBox(height: 3),
+                      Text(
+                        hasPhone ? customer.phone : 'No phone on file',
+                        style: TextStyle(fontSize: 12, color: palette.textSecondary),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    customer.phone.isEmpty ? 'No phone on file' : customer.phone,
-                    style: TextStyle(fontSize: 12, color: palette.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  orderCount == 1 ? '1 order' : '$orderCount orders',
-                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: palette.textPrimary),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  orderCount == 0 ? '—' : _priceFormat.format(totalSpent),
-                  style: TextStyle(fontSize: 11.5, color: palette.textSecondary),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: hasPhone ? onCall : null,
+                  child: Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: hasPhone ? AppColors.accent.withOpacity(0.1) : palette.border,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.call_outlined,
+                      size: 16,
+                      color: hasPhone ? AppColors.accent : palette.textSecondary,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(width: 4),
-            Icon(Icons.chevron_right_rounded, size: 18, color: palette.textSecondary),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(color: badgeBg, borderRadius: BorderRadius.circular(7)),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shopping_bag_outlined, size: 12, color: badgeText),
+                      const SizedBox(width: 5),
+                      Text(
+                        orderCount == 1 ? '1 order' : '$orderCount orders',
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: badgeText),
+                      ),
+                    ],
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onEdit,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.edit_outlined, size: 14, color: palette.textSecondary),
+                      const SizedBox(width: 4),
+                      Text('Edit', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: palette.textSecondary)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.chevron_right_rounded, size: 18, color: palette.textSecondary),
+              ],
+            ),
           ],
         ),
       ),

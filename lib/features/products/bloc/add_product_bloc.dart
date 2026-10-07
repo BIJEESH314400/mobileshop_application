@@ -13,6 +13,7 @@ class AddProductBloc extends Bloc<AddProductEvent, AddProductState> {
       : _repository = repository ?? ProductRepository(),
         super(const AddProductState()) {
     on<AddProductSubmitted>(_onSubmitted);
+    on<AddProductDeleted>(_onDeleted);
   }
 
   Future<void> _onSubmitted(AddProductSubmitted event, Emitter<AddProductState> emit) async {
@@ -56,6 +57,19 @@ class AddProductBloc extends Bloc<AddProductEvent, AddProductState> {
         isSubmitting: false,
         errorMessage: 'Could not save product. Please check your connection and try again.',
         isSuccess: false,
+      ));
+    }
+  }
+
+  Future<void> _onDeleted(AddProductDeleted event, Emitter<AddProductState> emit) async {
+    emit(state.copyWith(isDeleting: true, clearError: true));
+    try {
+      await _repository.deleteProduct(event.productId);
+      emit(state.copyWith(isDeleting: false, isDeleted: true));
+    } catch (_) {
+      emit(state.copyWith(
+        isDeleting: false,
+        errorMessage: 'Could not delete product. Please check your connection and try again.',
       ));
     }
   }

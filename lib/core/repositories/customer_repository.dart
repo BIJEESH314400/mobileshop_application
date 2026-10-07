@@ -32,4 +32,27 @@ class CustomerRepository {
     final doc = await _customers.add(customer.toMap());
     return doc.id;
   }
+
+  /// Updates an existing customer document in place. Deliberately strips
+  /// `createdAt` from the map before writing (`toMap()` always stamps a
+  /// fresh `FieldValue.serverTimestamp()`, correct for a brand-new
+  /// customer but wrong here -- it would silently reset the customer's
+  /// original creation time, and therefore their position in the
+  /// alphabetically-sorted list stays the same either way, but any
+  /// future "newest customers" view would quietly break). Same pattern
+  /// as `ProductRepository.updateProduct`.
+  Future<void> updateCustomer(String id, Customer customer) {
+    final map = customer.toMap()..remove('createdAt');
+    return _customers.doc(id).update(map);
+  }
+
+  /// Permanently removes a customer. There's no undo -- the caller is
+  /// responsible for confirming with the person first. Any Sale or
+  /// ServiceJob that was linked to this customer keeps its own
+  /// snapshotted customerName/customerPhone (see Sale/ServiceJob's own
+  /// doc comments) so old records still show who it was even after the
+  /// customer record itself is gone.
+  Future<void> deleteCustomer(String id) {
+    return _customers.doc(id).delete();
+  }
 }

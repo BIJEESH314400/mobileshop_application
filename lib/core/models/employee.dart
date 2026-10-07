@@ -12,12 +12,19 @@ class Employee extends Equatable {
   final String shopId;
   final DateTime? createdAt;
 
+  /// True once the owner has "removed" this employee (added 2026-10-06,
+  /// see EmployeeRepository.setDisabled's doc comment for why this is a
+  /// flag and not an actual deleted document). Defaults false for every
+  /// employee created before this field existed.
+  final bool disabled;
+
   const Employee({
     required this.id,
     required this.name,
     required this.username,
     required this.shopId,
     this.createdAt,
+    this.disabled = false,
   });
 
   factory Employee.fromMap(String id, Map<String, dynamic> map) {
@@ -28,6 +35,7 @@ class Employee extends Equatable {
       username: map['username'] as String? ?? '',
       shopId: map['shopId'] as String? ?? '',
       createdAt: rawCreatedAt is Timestamp ? rawCreatedAt.toDate() : null,
+      disabled: map['disabled'] as bool? ?? false,
     );
   }
 
@@ -42,5 +50,5 @@ class Employee extends Equatable {
   }
 
   @override
-  List<Object?> get props => [id, name, username, shopId, createdAt];
+  List<Object?> get props => [id, name, username, shopId, createdAt, disabled];
 }

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/models/sale.dart';
+import '../../../core/models/service_job.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
@@ -11,10 +12,20 @@ import '../../chat/bloc/unread_summary_bloc.dart';
 import '../../chat/bloc/unread_summary_event.dart';
 import '../../chat/bloc/unread_summary_state.dart';
 import '../../chat/view/conversation_screen.dart';
+import '../../search/view/global_search_screen.dart';
 import 'notifications_screen.dart';
 import '../../sales/bloc/sales_history_bloc.dart';
 import '../../sales/bloc/sales_history_event.dart';
 import '../../sales/bloc/sales_history_state.dart';
+import '../../products/bloc/products_bloc.dart';
+import '../../products/bloc/products_event.dart';
+import '../../products/bloc/products_state.dart';
+import '../../profile/bloc/current_user_bloc.dart';
+import '../../profile/bloc/current_user_event.dart';
+import '../../profile/bloc/current_user_state.dart';
+import '../../service/bloc/service_bloc.dart';
+import '../../service/bloc/service_event.dart';
+import '../../service/bloc/service_state.dart';
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 final _timeFormat = DateFormat('h:mm a');
@@ -61,6 +72,9 @@ class DashboardScreen extends StatelessWidget {
       providers: [
         BlocProvider(create: (_) => SalesHistoryBloc()..add(const SalesHistorySubscriptionRequested())),
         BlocProvider(create: (_) => UnreadSummaryBloc()..add(const UnreadSummarySubscriptionRequested())),
+        BlocProvider(create: (_) => ServiceBloc()..add(const ServiceSubscriptionRequested())),
+        BlocProvider(create: (_) => CurrentUserBloc()..add(const CurrentUserRequested())),
+        BlocProvider(create: (_) => ProductsBloc()..add(const ProductsSubscriptionRequested())),
       ],
       child: Scaffold(
         backgroundColor: p.background,
@@ -80,33 +94,7 @@ class DashboardScreen extends StatelessWidget {
                       const SizedBox(height: 22),
                       _RecentSalesSection(palette: p),
                       const SizedBox(height: 22),
-                      _SectionList(
-                        palette: p,
-                        title: 'Service queue',
-                        viewAllRoute: AppRoutes.service,
-                        rows: const [
-                          _ListRowData(
-                            icon: Icons.bolt_rounded,
-                            iconBg: AppColors.warningBg,
-                            iconColor: AppColors.warningText,
-                            title: 'Screen replacement',
-                            subtitle: 'OnePlus Nord · Priya M.',
-                            badgeLabel: 'In Progress',
-                            badgeColor: AppColors.warningText,
-                            badgeBg: AppColors.warningBg,
-                          ),
-                          _ListRowData(
-                            icon: Icons.bolt_rounded,
-                            iconBg: AppColors.successBg,
-                            iconColor: AppColors.success,
-                            title: 'Battery replacement',
-                            subtitle: 'iPhone 12 · Aman G.',
-                            badgeLabel: 'Ready',
-                            badgeColor: AppColors.success,
-                            badgeBg: AppColors.successBg,
-                          ),
-                        ],
-                      ),
+                      _ServiceQueueSection(palette: p),
                     ],
                   ),
                 ),
@@ -193,6 +181,93 @@ class _RecentSalesSection extends StatelessWidget {
   }
 }
 
+/// Real "Service queue" -- the 2 most recently touched repair jobs that
+/// aren't finished yet (Pending/In Progress/Ready), live via ServiceBloc
+/// -> ServiceJobRepository.watchJobs(). Added 2026-10-06 once Service
+/// Jobs itself went live -- same "falls back to a plain message instead
+/// of ever showing made-up data" shape _RecentSalesSection already
+/// uses, not _SectionList's own built-in empty state (that one's just a
+/// permanent loading spinner, correct only for the "still loading"
+/// case, not "confirmed empty").
+class _ServiceQueueSection extends StatelessWidget {
+  final AppPalette palette;
+
+  const _ServiceQueueSection({required this.palette});
+
+  _ListRowData _rowFor(ServiceJob job) {
+    final Color badgeBg;
+    final Color badgeColor;
+    switch (job.status) {
+      case ServiceJobStatus.inProgress:
+        badgeBg = AppColors.warningBg;
+        badgeColor = AppColors.warningText;
+        break;
+      case ServiceJobStatus.ready:
+        badgeBg = AppColors.successBg;
+        badgeColor = AppColors.success;
+        break;
+      case ServiceJobStatus.completed:
+        badgeBg = AppColors.accent.withOpacity(0.10);
+        badgeColor = AppColors.accent;
+        break;
+      case ServiceJobStatus.pending:
+        // Same neutral-gray treatment the Service screen's own job
+        // cards use for Pending -- follows the theme instead of a
+        // fixed brand hue.
+        badgeBg = palette.divider;
+        badgeColor = palette.textSecondary;
+        break;
+    }
+    final subtitle = job.customerName.isEmpty ? job.deviceModel : '${job.deviceModel} · ${job.customerName}';
+    return _ListRowData(
+      icon: Icons.bolt_rounded,
+      iconBg: badgeBg,
+      iconColor: badgeColor,
+      title: job.title,
+      subtitle: subtitle,
+      badgeLabel: job.status.label,
+      badgeColor: badgeColor,
+      badgeBg: badgeBg,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ServiceBloc, ServiceState>(
+      builder: (context, state) {
+        if (state.isLoading && state.jobs.isEmpty) {
+          return _SectionList(palette: palette, title: 'Service queue', viewAllRoute: AppRoutes.service, rows: const []);
+        }
+
+        final active = state.jobs.where((j) => j.status != ServiceJobStatus.completed).toList();
+
+        if (active.isEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Service queue', style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: palette.textPrimary)),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 20),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: palette.card,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: palette.border),
+                ),
+                child: Text('No repairs in the queue', style: TextStyle(fontSize: 13, color: palette.textSecondary)),
+              ),
+            ],
+          );
+        }
+
+        final rows = active.take(2).map(_rowFor).toList();
+        return _SectionList(palette: palette, title: 'Service queue', viewAllRoute: AppRoutes.service, rows: rows);
+      },
+    );
+  }
+}
+
 class _Header extends StatelessWidget {
   final AppPalette palette;
 
@@ -206,23 +281,33 @@ class _Header extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Good morning, Arjun',
-                style: TextStyle(fontSize: 13, color: palette.textSecondary, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                '4B Mobiles',
-                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: palette.textPrimary),
-              ),
-            ],
+          BlocBuilder<CurrentUserBloc, CurrentUserState>(
+            builder: (context, userState) {
+              final name = userState.user?.displayName;
+              final greeting = (name == null || name.isEmpty) ? _greetingPrefix() : '${_greetingPrefix()}, $name';
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    greeting,
+                    style: TextStyle(fontSize: 13, color: palette.textSecondary, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '4B Mobiles',
+                    style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, letterSpacing: -0.2, color: palette.textPrimary),
+                  ),
+                ],
+              );
+            },
           ),
           Row(
             children: [
-              _IconButton(palette: palette, icon: Icons.search_rounded, onTap: () {}),
+              _IconButton(
+                palette: palette,
+                icon: Icons.search_rounded,
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GlobalSearchScreen())),
+              ),
               const SizedBox(width: 10),
               BlocBuilder<UnreadSummaryBloc, UnreadSummaryState>(
                 builder: (context, state) {
@@ -304,6 +389,17 @@ class _IconButton extends StatelessWidget {
 
 bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
+/// "Good morning"/"Good afternoon"/"Good evening" based on the device's
+/// current local time -- same device-clock reasoning _StatGrid already
+/// uses for "today"/"yesterday", just for a greeting instead of a date
+/// comparison.
+String _greetingPrefix() {
+  final hour = DateTime.now().hour;
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 /// Today's Sales + Orders Today, computed live from the same
 /// SalesHistoryBloc stream Recent Sales uses (SaleRepository.watchSales()
 /// — every sale for this shop, so "today"/"yesterday" are worked out
@@ -314,6 +410,14 @@ class _StatGrid extends StatelessWidget {
   final AppPalette palette;
 
   const _StatGrid({required this.palette});
+
+  /// A product at or below this stock count counts as "low stock" for
+  /// the Dashboard card below -- a simple, fixed, easy-to-explain
+  /// number rather than a per-product reorder point (which the data
+  /// model doesn't have), same "pick a plain constant, flag it as
+  /// adjustable" approach CustomersState.vipOrderThreshold already
+  /// uses for its own VIP cutoff.
+  static const int lowStockThreshold = 5;
 
   @override
   Widget build(BuildContext context) {
@@ -362,55 +466,89 @@ class _StatGrid extends StatelessWidget {
               : '${diff > 0 ? '+' : ''}$diff vs yesterday';
         }
 
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 1.5,
-          children: [
-            _StatCard(
-              label: "Today's Sales",
-              value: _priceFormat.format(todayTotal),
-              labelColor: Colors.white70,
-              valueColor: Colors.white,
-              background: AppColors.accent,
-              trend: salesTrend,
-              trendColor: salesTrendColor,
-              showTrendIcon: showSalesTrendIcon,
-              trendIcon: salesTrendIcon,
-            ),
-            _StatCard(
-              label: 'Orders Today',
-              value: '$ordersToday',
-              labelColor: palette.textSecondary,
-              valueColor: palette.textPrimary,
-              background: palette.card,
-              border: palette.border,
-              trend: ordersTrend,
-              trendColor: palette.textSecondary,
-            ),
-            _StatCard(
-              label: 'Repairs Active',
-              value: '5',
-              labelColor: palette.textSecondary,
-              valueColor: palette.textPrimary,
-              background: palette.card,
-              border: palette.border,
-              trend: '2 ready for pickup',
-              trendColor: palette.textSecondary,
-            ),
-            const _StatCard(
-          label: 'Low Stock',
-          value: '3 items',
-          labelColor: AppColors.warningText,
-          valueColor: AppColors.warningText,
-          background: AppColors.warningBg,
-          trend: 'Needs reorder',
-          trendColor: AppColors.warningText,
-        ),
-          ],
+        return BlocBuilder<ServiceBloc, ServiceState>(
+          builder: (context, serviceState) {
+            // "Repairs Active" -- live as of 2026-10-06, once Service
+            // Jobs itself went real. Active = anything not yet picked
+            // up (Pending/In Progress/Ready); the trend line calls out
+            // how many of those are specifically ready for pickup, the
+            // most actionable subset, same "honest fallback instead of
+            // a fabricated number" idea as the sales trend above.
+            final activeRepairs = serviceState.jobs.where((j) => j.status != ServiceJobStatus.completed).toList();
+            final readyRepairs = activeRepairs.where((j) => j.status == ServiceJobStatus.ready).length;
+            final String repairsTrend;
+            if (activeRepairs.isEmpty) {
+              repairsTrend = 'No repairs in progress';
+            } else if (readyRepairs > 0) {
+              repairsTrend = '$readyRepairs ready for pickup';
+            } else {
+              repairsTrend = 'In the queue';
+            }
+
+            return BlocBuilder<ProductsBloc, ProductsState>(
+              builder: (context, productsState) {
+                // "Low Stock" -- live as of 2026-10-06. Counts every
+                // product at or below lowStockThreshold units, out of
+                // stock (0) included. Same honest-fallback idea as the
+                // other 3 cards: no reorder needed shows a calm message
+                // instead of a scary-looking static "3 items".
+                final lowStockCount = productsState.products.where((p) => p.stockQty <= lowStockThreshold).length;
+                final lowStockOk = lowStockCount == 0;
+
+                return GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 1.5,
+                  children: [
+                    _StatCard(
+                      label: "Today's Sales",
+                      value: _priceFormat.format(todayTotal),
+                      labelColor: Colors.white70,
+                      valueColor: Colors.white,
+                      background: AppColors.accent,
+                      trend: salesTrend,
+                      trendColor: salesTrendColor,
+                      showTrendIcon: showSalesTrendIcon,
+                      trendIcon: salesTrendIcon,
+                    ),
+                    _StatCard(
+                      label: 'Orders Today',
+                      value: '$ordersToday',
+                      labelColor: palette.textSecondary,
+                      valueColor: palette.textPrimary,
+                      background: palette.card,
+                      border: palette.border,
+                      trend: ordersTrend,
+                      trendColor: palette.textSecondary,
+                    ),
+                    _StatCard(
+                      label: 'Repairs Active',
+                      value: '${activeRepairs.length}',
+                      labelColor: palette.textSecondary,
+                      valueColor: palette.textPrimary,
+                      background: palette.card,
+                      border: palette.border,
+                      trend: repairsTrend,
+                      trendColor: palette.textSecondary,
+                    ),
+                    _StatCard(
+                      label: 'Low Stock',
+                      value: lowStockOk ? '0 items' : '$lowStockCount item${lowStockCount == 1 ? '' : 's'}',
+                      labelColor: lowStockOk ? palette.textSecondary : AppColors.warningText,
+                      valueColor: lowStockOk ? palette.textPrimary : AppColors.warningText,
+                      background: lowStockOk ? palette.card : AppColors.warningBg,
+                      border: lowStockOk ? palette.border : null,
+                      trend: lowStockOk ? 'All stocked up' : 'Needs reorder',
+                      trendColor: lowStockOk ? palette.textSecondary : AppColors.warningText,
+                    ),
+                  ],
+                );
+              },
+            );
+          },
         );
       },
     );

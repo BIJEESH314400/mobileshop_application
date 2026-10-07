@@ -154,6 +154,7 @@ class _PeriodPills extends StatelessWidget {
     final p = AppPalette.of(context);
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.only(right: 20),
       child: Row(
         children: [
           for (final entry in _labels.entries) ...[
@@ -181,7 +182,17 @@ class _Pill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: () {
+        onTap();
+        // Same auto-scroll-into-view fix as Products'/Service's filter
+        // pills (2026-10-06) -- scrolls the tapped period pill fully
+        // into view if it was sitting partially cut off at the edge.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            Scrollable.ensureVisible(context, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+          }
+        });
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         decoration: BoxDecoration(

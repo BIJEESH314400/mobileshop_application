@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/models/product.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/confirm_delete_dialog.dart';
 import '../../../core/widgets/lookup_picker_dialog.dart';
 import '../bloc/add_product_bloc.dart';
 import '../bloc/add_product_event.dart';
@@ -153,6 +154,19 @@ class _AddProductViewState extends State<_AddProductView> {
       ..showSnackBar(SnackBar(content: Text('$label — coming soon')));
   }
 
+  Future<void> _confirmDelete(BuildContext context) async {
+    final confirmed = await ConfirmDeleteDialog.show(
+      context,
+      title: 'Delete this product permanently?',
+      message: "This can't be undone. It will be removed from your product list for good.",
+      confirmLabel: 'Yes, Delete Product',
+      cancelLabel: 'Keep Product',
+    );
+    if (confirmed && context.mounted) {
+      context.read<AddProductBloc>().add(AddProductDeleted(productId: widget.product!.id));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
@@ -170,6 +184,12 @@ class _AddProductViewState extends State<_AddProductView> {
             ..showSnackBar(SnackBar(content: Text(_isEditing ? 'Product updated' : 'Product saved')));
           Navigator.pop(context);
         }
+        if (state.isDeleted) {
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(const SnackBar(content: Text('Product deleted')));
+          Navigator.pop(context);
+        }
       },
       builder: (context, state) {
         return Scaffold(
@@ -184,6 +204,7 @@ class _AddProductViewState extends State<_AddProductView> {
                     border: Border(bottom: BorderSide(color: p.border)),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
@@ -198,6 +219,19 @@ class _AddProductViewState extends State<_AddProductView> {
                           ],
                         ),
                       ),
+                      if (_isEditing) ...[
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: (state.isSubmitting || state.isDeleting) ? null : () => _confirmDelete(context),
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(color: AppColors.danger.withOpacity(0.1), shape: BoxShape.circle),
+                            child: const Icon(Icons.delete_outline_rounded, size: 19, color: AppColors.danger),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -449,7 +483,7 @@ class _AddProductViewState extends State<_AddProductView> {
                     border: Border(top: BorderSide(color: p.border)),
                   ),
                   child: GestureDetector(
-                    onTap: state.isSubmitting ? null : () => _save(context),
+                    onTap: (state.isSubmitting || state.isDeleting) ? null : () => _save(context),
                     child: Container(
                       height: 52,
                       alignment: Alignment.center,

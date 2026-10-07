@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -13,13 +14,31 @@ import 'login_state.dart';
 class LoginBloc extends Bloc<LoginEvent, LoginState> {
   final FirebaseAuth _auth;
   final PinRepository _pinRepository;
+  final FirebaseFirestore _db;
 
-  LoginBloc({FirebaseAuth? auth, PinRepository? pinRepository})
+  LoginBloc({FirebaseAuth? auth, PinRepository? pinRepository, FirebaseFirestore? firestore})
       : _auth = auth ?? FirebaseAuth.instance,
         _pinRepository = pinRepository ?? PinRepository(),
+        _db = firestore ?? FirebaseFirestore.instance,
         super(const LoginState()) {
     on<LoginSubmitted>(_onSubmitted);
     on<BranchSelected>(_onBranchSelected);
+  }
+
+  /// True only on a confirmed "yes, this uid's employee record is
+  /// disabled" read. Any failure (network blip, rules hiccup) returns
+  /// false on purpose -- same fail-open reasoning as `_hasPinSafe`
+  /// below, so a connectivity hiccup during sign-in never locks out a
+  /// legitimate, still-active employee. Added 2026-10-06 alongside the
+  /// employee delete/remove feature -- see EmployeeRepository.setDisabled.
+  Future<bool> _isDisabledEmployee(String uid) async {
+    try {
+      final doc = await _db.collection('employees').doc(uid).get();
+      return doc.data()?['disabled'] == true;
+    } catch (e, st) {
+      AppLogger.error('LoginBloc._isDisabledEmployee', e, st);
+      return false;
+    }
   }
 
 
@@ -47,8 +66,17 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       final credential =
           await _auth.signInWithEmailAndPassword(email: email, password: event.password);
 
-
       final uid = credential.user?.uid;
+      if (uid != null && await _isDisabledEmployee(uid)) {
+        await _auth.signOut();
+        emit(state.copyWith(
+          isSubmitting: false,
+          errorMessage: 'This account has been removed. Contact the shop owner.',
+          isSuccess: false,
+        ));
+        return;
+      }
+
       final pinStatus = uid == null ? null : await _hasPinSafe(uid);
 
       emit(state.copyWith(

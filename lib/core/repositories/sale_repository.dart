@@ -76,4 +76,24 @@ class SaleRepository {
       }
     });
   }
+
+  /// Links (or re-links) an already-completed sale to a customer --
+  /// e.g. a sale rung up as "Walk-in customer" that someone wants to
+  /// attach to a real customer afterward. Deliberately only ever
+  /// touches these 3 fields -- `firestore.rules`' `sales/{id}` update
+  /// rule only allows a write that changes exactly this set of keys,
+  /// so items/prices/total/payment method etc. stay permanently
+  /// locked no matter what this method is called with.
+  Future<void> linkSaleToCustomer(
+    String saleId, {
+    required String customerId,
+    required String customerName,
+    required String customerPhone,
+  }) {
+    return _sales.doc(saleId).update({
+      'customerId': customerId,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+    });
+  }
 }

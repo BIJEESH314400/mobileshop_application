@@ -41,6 +41,12 @@ class AppColors {
   static const purple = Color(0xFF7C3AED);
   static const purpleBg = Color(0xFFEDE9FE);
 
+  // Added for the Customers list's order-count pill (2026-10-06) --
+  // a neutral grey for customers with 0 orders, matching the same
+  // bg/solid-color pair pattern as the other status badges above.
+  static const neutralText = Color(0xFF6B7280);
+  static const neutralBg = Color(0xFFF3F4F6);
+
   // Light-lavender tint square behind a product/cart-item icon (Products,
   // Sales). Matches the design canvas exactly; kept fixed in both themes,
   // same as the other brand/status tint pairs above.

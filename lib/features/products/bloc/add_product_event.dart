@@ -41,3 +41,15 @@ class AddProductSubmitted extends AddProductEvent {
   List<Object?> get props =>
       [name, category, brand, price, stockQty, sku, condition, description, productId];
 }
+
+/// Fired when "Delete" is tapped and confirmed on an existing product's
+/// Edit screen (only reachable in edit mode -- there's nothing to
+/// delete on a brand-new, unsaved product).
+class AddProductDeleted extends AddProductEvent {
+  final String productId;
+
+  const AddProductDeleted({required this.productId});
+
+  @override
+  List<Object?> get props => [productId];
+}

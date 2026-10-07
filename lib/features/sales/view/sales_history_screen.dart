@@ -4,9 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/constants/shop_constants.dart';
 import '../../../core/models/sale.dart';
+import '../../../core/repositories/customer_repository.dart';
+import '../../../core/repositories/sale_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/utils/app_logger.dart';
+import 'customer_picker_sheet.dart';
 import 'date_range_filter_sheet.dart';
 import '../bloc/sales_history_bloc.dart';
 import '../bloc/sales_history_event.dart';
@@ -890,6 +895,106 @@ class _Chip extends StatelessWidget {
   }
 }
 
+/// Shows who a sale is linked to, or -- for a "Walk-in customer" sale
+/// (`customerId` empty) -- a tappable "link a customer" row. Added
+/// 2026-10-06 so a sale rung up without picking a customer at checkout
+/// isn't stuck that way forever. Its own small `StatefulWidget` (not a
+/// StatefulBuilder inside `_showReceipt`) so the loading-spinner state
+/// while fetching the customer list / writing the link doesn't need to
+/// thread through the surrounding function.
+class _CustomerLinkRow extends StatefulWidget {
+  final AppPalette palette;
+  final Sale sale;
+  const _CustomerLinkRow({required this.palette, required this.sale});
+
+  @override
+  State<_CustomerLinkRow> createState() => _CustomerLinkRowState();
+}
+
+class _CustomerLinkRowState extends State<_CustomerLinkRow> {
+  bool _working = false;
+
+  Future<void> _link() async {
+    setState(() => _working = true);
+    try {
+      // One-shot read of the current customer list via the live stream's
+      // first snapshot -- no separate "get all customers" repository
+      // method exists yet, and this sheet doesn't need to stay
+      // subscribed afterward.
+      final customers = await CustomerRepository().watchCustomers(shopId: currentShopId).first;
+      if (!mounted) return;
+      final result = await showCustomerPickerSheet(context, customers: customers, selected: null);
+      if (result == null || result.customer == null) {
+        if (mounted) setState(() => _working = false);
+        return;
+      }
+      final customer = result.customer!;
+      await SaleRepository().linkSaleToCustomer(
+        widget.sale.id,
+        customerId: customer.id,
+        customerName: customer.name,
+        customerPhone: customer.phone,
+      );
+      if (!mounted) return;
+      // Close the receipt sheet -- the live Sales History list will
+      // reflect the new link within a moment on its own, no explicit
+      // refresh needed (same reasoning as every other live list here).
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Linked to ${customer.name}')));
+    } catch (e, st) {
+      AppLogger.error('SalesHistory._CustomerLinkRow._link', e, st);
+      if (!mounted) return;
+      setState(() => _working = false);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text("Couldn't link customer — check your connection and try again")));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.palette;
+    if (widget.sale.customerId.isNotEmpty) {
+      return Text.rich(
+        TextSpan(
+          style: TextStyle(fontSize: 12.5, color: p.textSecondary),
+          children: [
+            const TextSpan(text: 'Customer: '),
+            TextSpan(
+              text: widget.sale.customerName.isEmpty ? '(unnamed)' : widget.sale.customerName,
+              style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent),
+            ),
+          ],
+        ),
+      );
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _working ? null : _link,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_working)
+            const SizedBox(
+              width: 13,
+              height: 13,
+              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppColors.accent)),
+            )
+          else
+            const Icon(Icons.person_add_alt_1_rounded, size: 14, color: AppColors.accent),
+          const SizedBox(width: 5),
+          Text(
+            _working ? 'Linking…' : 'Walk-in sale — tap to link a customer',
+            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 void _showReceipt(BuildContext context, Sale sale, AppPalette palette) {
   showModalBottomSheet(
     context: context,
@@ -924,7 +1029,9 @@ void _showReceipt(BuildContext context, Sale sale, AppPalette palette) {
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 2),
+              _CustomerLinkRow(palette: palette, sale: sale),
+              const SizedBox(height: 14),
               for (final item in sale.items)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),

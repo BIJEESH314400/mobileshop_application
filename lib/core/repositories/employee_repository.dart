@@ -95,4 +95,24 @@ class EmployeeRepository {
       await tempApp.delete();
     }
   }
+
+  /// "Removes" an employee -- but deliberately by *disabling* their
+  /// existing `employees/{uid}` document rather than deleting it.
+  ///
+  /// There is no Firebase Admin SDK available from this Flutter app, so
+  /// their actual Firebase Auth login can't be deleted from here -- only
+  /// from the Firebase Console by hand, or a backend Cloud Function
+  /// neither of which this app has set up. That alone wouldn't be a
+  /// correctness problem by itself, but deleting *just* the Firestore
+  /// doc would be actively dangerous: CurrentUserRepository's whole
+  /// identity check is "no employees/<uid> doc -> must be the owner" --
+  /// so a deleted (not disabled) employee could still sign in with
+  /// their same old password and the app would treat them as the full
+  /// shop owner. Disabling instead keeps the doc in place (so that
+  /// check still correctly says "this uid is an employee") while
+  /// LoginBloc/SplashBloc both now refuse to let a disabled employee's
+  /// session through -- see their own doc comments.
+  Future<void> setDisabled(String uid, bool disabled) {
+    return _employees.doc(uid).update({'disabled': disabled});
+  }
 }
