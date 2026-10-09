@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/widgets/confirm_delete_dialog.dart';
+import '../../../core/widgets/owner_only_gate.dart';
 import '../bloc/staff_bloc.dart';
 import '../bloc/staff_event.dart';
 import '../bloc/staff_state.dart';
@@ -22,9 +23,11 @@ class StaffManagementScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => StaffBloc()..add(const StaffSubscriptionRequested()),
-      child: const _StaffManagementView(),
+    return OwnerOnlyGate(
+      child: BlocProvider(
+        create: (_) => StaffBloc()..add(const StaffSubscriptionRequested()),
+        child: const _StaffManagementView(),
+      ),
     );
   }
 }

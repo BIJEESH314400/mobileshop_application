@@ -10,6 +10,7 @@ import '../../../core/widgets/app_bottom_nav.dart';
 import '../../../core/repositories/pin_repository.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../pin/view/set_pin_screen.dart';
+import 'set_recovery_email_sheet.dart';
 import '../../chat/view/chat_list_screen.dart';
 import '../../chat/view/conversation_screen.dart';
 import '../../theme/bloc/theme_bloc.dart';
@@ -62,6 +63,7 @@ class _ProfileView extends StatefulWidget {
 class _ProfileViewState extends State<_ProfileView> {
   bool _notifOn = true;
   Future<bool>? _hasPinFuture;
+  Future<String?>? _recoveryEmailFuture;
 
   void _comingSoon(String feature) {
     ScaffoldMessenger.of(context)
@@ -75,6 +77,26 @@ class _ProfileViewState extends State<_ProfileView> {
       // set"/"Enabled" subtitle reflects reality when they come back.
       if (mounted) setState(() => _hasPinFuture = null);
     });
+  }
+
+  /// Re-reads whatever email Firebase Auth actually has on file,
+  /// refreshing from the server first -- the only way to notice a
+  /// Recovery Email verification link got clicked since this device
+  /// last checked (see CurrentUserRepository's own matching reload).
+  Future<String?> _loadRecoveryEmail() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    try {
+      await user.reload();
+    } catch (e, st) {
+      AppLogger.error('ProfileScreen._loadRecoveryEmail', e, st);
+    }
+    return FirebaseAuth.instance.currentUser?.email;
+  }
+
+  Future<void> _openSetRecoveryEmail(String? currentEmail) async {
+    await showSetRecoveryEmailSheet(context, currentEmail: currentEmail);
+    if (mounted) setState(() => _recoveryEmailFuture = null);
   }
 
   Future<void> _logOut() async {
@@ -142,6 +164,9 @@ class _ProfileViewState extends State<_ProfileView> {
     // after returning from SetPinScreen (see _openSetPin above).
     if (user != null && _hasPinFuture == null) {
       _hasPinFuture = PinRepository().hasPin(user.uid);
+    }
+    if (user != null && _recoveryEmailFuture == null) {
+      _recoveryEmailFuture = _loadRecoveryEmail();
     }
 
     return Scaffold(
@@ -315,6 +340,22 @@ class _ProfileViewState extends State<_ProfileView> {
                                       icon: Icons.pin_outlined,
                                       label: hasPin ? 'Quick PIN · Enabled' : 'Quick PIN · Not set',
                                       onTap: _openSetPin,
+                                    ),
+                                    showBottomBorder: true,
+                                  );
+                                },
+                              ),
+                              FutureBuilder<String?>(
+                                future: _recoveryEmailFuture,
+                                builder: (context, snapshot) {
+                                  final email = snapshot.data;
+                                  final isReal = email != null && !email.toLowerCase().endsWith('@4bmobiles.app');
+                                  return _MenuRow(
+                                    palette: p,
+                                    data: _MenuRowData(
+                                      icon: Icons.email_outlined,
+                                      label: isReal ? 'Recovery Email · Set' : 'Recovery Email · Not set',
+                                      onTap: () => _openSetRecoveryEmail(email),
                                     ),
                                     showBottomBorder: true,
                                   );

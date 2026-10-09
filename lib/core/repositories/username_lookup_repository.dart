@@ -27,4 +27,17 @@ class UsernameLookupRepository {
     final email = doc.data()?['email'] as String?;
     return (email == null || email.trim().isEmpty) ? null : email.trim();
   }
+
+  /// Writes/overwrites the real email registered for [username] --
+  /// used by `CurrentUserRepository`'s self-healing check to keep this
+  /// collection in sync once Firebase Auth's own email for an account
+  /// actually changes (e.g. after someone verifies a new recovery
+  /// email via `verifyBeforeUpdateEmail`). `merge: true` so it never
+  /// disturbs any other field a future addition might put on this doc.
+  Future<void> setEmailForUsername(String username, String email) async {
+    final id = username.trim().toLowerCase();
+    final cleanEmail = email.trim();
+    if (id.isEmpty || cleanEmail.isEmpty) return;
+    await _db.collection('usernames').doc(id).set({'email': cleanEmail}, SetOptions(merge: true));
+  }
 }

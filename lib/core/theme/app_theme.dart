@@ -6,6 +6,7 @@ ThemeData buildAppTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
+    fontFamily: 'Manrope',
     scaffoldBackgroundColor: AppColors.background,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,
@@ -28,6 +29,7 @@ ThemeData buildAppDarkTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
+    fontFamily: 'Manrope',
     scaffoldBackgroundColor: AppColors.darkBackground,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,

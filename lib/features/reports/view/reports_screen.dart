@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/models/sale.dart';
 import '../../../core/theme/app_colors.dart';
@@ -8,6 +9,7 @@ import '../../../core/theme/app_palette.dart';
 import '../bloc/reports_bloc.dart';
 import '../bloc/reports_event.dart';
 import '../bloc/reports_state.dart';
+import '../utils/report_pdf.dart';
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
@@ -62,6 +64,14 @@ class _ReportsViewState extends State<_ReportsView> {
     }).toList();
   }
 
+  Future<void> _exportReportPdf(BuildContext context) async {
+    final state = context.read<ReportsBloc>().state;
+    final filtered = _filtered(state.sales);
+    final periodLabel = _PeriodPills._labels[_period] ?? '';
+    final bytes = await buildReportPdfBytes(periodLabel: periodLabel, sales: filtered);
+    await Printing.sharePdf(bytes: bytes, filename: 'report-${periodLabel.toLowerCase().replaceAll(' ', '-')}.pdf');
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
@@ -76,14 +86,31 @@ class _ReportsViewState extends State<_ReportsView> {
               decoration: BoxDecoration(color: p.background, border: Border(bottom: BorderSide(color: p.border))),
               child: Row(
                 children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Row(
+                        children: [
+                          Icon(Icons.arrow_back_rounded, size: 20, color: p.textPrimary),
+                          const SizedBox(width: 14),
+                          Flexible(
+                            child: Text(
+                              'Reports & Analytics',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: p.textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Row(
-                      children: [
-                        Icon(Icons.arrow_back_rounded, size: 20, color: p.textPrimary),
-                        const SizedBox(width: 14),
-                        Text('Reports & Analytics', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: p.textPrimary)),
-                      ],
+                    onTap: () => _exportReportPdf(context),
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(11), border: Border.all(color: p.border)),
+                      child: Icon(Icons.ios_share_rounded, size: 18, color: p.textPrimary),
                     ),
                   ),
                 ],

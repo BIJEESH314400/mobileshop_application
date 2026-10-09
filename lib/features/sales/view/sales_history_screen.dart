@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/constants/shop_constants.dart';
 import '../../../core/models/sale.dart';
@@ -16,6 +17,7 @@ import 'date_range_filter_sheet.dart';
 import '../bloc/sales_history_bloc.dart';
 import '../bloc/sales_history_event.dart';
 import '../bloc/sales_history_state.dart';
+import '../utils/sales_pdf.dart';
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 final _dateFormat = DateFormat('d MMM, h:mm a');
@@ -65,6 +67,11 @@ String _rangeLabel(DateTimeRange range) {
 
 void _comingSoon(BuildContext context, String label) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label — coming soon')));
+}
+
+Future<void> _shareReceiptPdf(BuildContext context, Sale sale) async {
+  final bytes = await buildReceiptPdfBytes(sale);
+  await Printing.sharePdf(bytes: bytes, filename: 'receipt-${sale.id}.pdf');
 }
 
 /// Revenue trend over the trailing 7 days vs. the 7 days before that --
@@ -211,7 +218,11 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
           builder: (context, state) {
             return Column(
               children: [
-                _Header(palette: p, updatedText: _relativeUpdated(state.lastUpdatedAt)),
+                _Header(
+                  palette: p,
+                  updatedText: _relativeUpdated(state.lastUpdatedAt),
+                  onExport: () => _exportSalesPdf(context, _filtered(state.sales)),
+                ),
                 Expanded(child: _buildBody(context, p, state)),
               ],
             );
@@ -219,6 +230,15 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
         ),
       ),
     );
+  }
+
+  Future<void> _exportSalesPdf(BuildContext context, List<Sale> sales) async {
+    final bytes = await buildSalesListPdfBytes(
+      sales,
+      dateRange: _dateRange,
+      searchQuery: _searchCtrl.text,
+    );
+    await Printing.sharePdf(bytes: bytes, filename: 'sales-history.pdf');
   }
 
   Widget _buildBody(BuildContext context, AppPalette p, SalesHistoryState state) {
@@ -311,7 +331,8 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
 class _Header extends StatelessWidget {
   final AppPalette palette;
   final String updatedText;
-  const _Header({required this.palette, required this.updatedText});
+  final VoidCallback onExport;
+  const _Header({required this.palette, required this.updatedText, required this.onExport});
 
   @override
   Widget build(BuildContext context) {
@@ -352,7 +373,7 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(width: 10),
           GestureDetector(
-            onTap: () => _comingSoon(context, 'Export'),
+            onTap: onExport,
             child: Container(
               width: 38,
               height: 38,
@@ -1008,7 +1029,17 @@ void _showReceipt(BuildContext context, Sale sale, AppPalette palette) {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Receipt', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: palette.textPrimary)),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('Receipt', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: palette.textPrimary)),
+                  ),
+                  GestureDetector(
+                    onTap: () => _shareReceiptPdf(context, sale),
+                    child: Icon(Icons.ios_share_rounded, size: 19, color: palette.textSecondary),
+                  ),
+                ],
+              ),
               const SizedBox(height: 2),
               Text(
                 sale.createdAt == null ? 'Just now' : _dateFormat.format(sale.createdAt!),

@@ -6,6 +6,7 @@ import '../../../core/theme/app_palette.dart';
 import '../bloc/add_employee_bloc.dart';
 import '../bloc/add_employee_event.dart';
 import '../bloc/add_employee_state.dart';
+import '../../../core/widgets/owner_only_gate.dart';
 
 /// Owner-only form: creates a real Firebase Auth login for a new
 /// employee (name, username, password) — same "username only" login
@@ -17,9 +18,11 @@ class AddEmployeeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => AddEmployeeBloc(),
-      child: const _AddEmployeeView(),
+    return OwnerOnlyGate(
+      child: BlocProvider(
+        create: (_) => AddEmployeeBloc(),
+        child: const _AddEmployeeView(),
+      ),
     );
   }
 }

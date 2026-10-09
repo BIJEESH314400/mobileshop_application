@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/repositories/pin_repository.dart';
+import '../../../core/repositories/username_lookup_repository.dart';
 import '../../../core/utils/app_logger.dart';
 import 'login_event.dart';
 import 'login_state.dart';
@@ -15,11 +16,17 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   final FirebaseAuth _auth;
   final PinRepository _pinRepository;
   final FirebaseFirestore _db;
+  final UsernameLookupRepository _usernames;
 
-  LoginBloc({FirebaseAuth? auth, PinRepository? pinRepository, FirebaseFirestore? firestore})
-      : _auth = auth ?? FirebaseAuth.instance,
+  LoginBloc({
+    FirebaseAuth? auth,
+    PinRepository? pinRepository,
+    FirebaseFirestore? firestore,
+    UsernameLookupRepository? usernames,
+  })  : _auth = auth ?? FirebaseAuth.instance,
         _pinRepository = pinRepository ?? PinRepository(),
         _db = firestore ?? FirebaseFirestore.instance,
+        _usernames = usernames ?? UsernameLookupRepository(),
         super(const LoginState()) {
     on<LoginSubmitted>(_onSubmitted);
     on<BranchSelected>(_onBranchSelected);
@@ -60,7 +67,26 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
 
     emit(state.copyWith(isSubmitting: true, clearError: true));
 
-    final email = '${event.username.trim()}@4bmobiles.app';
+    final username = event.username.trim();
+    // Same `usernames/<username>` lookup Forgot Password reads -- the
+    // two have to agree on which email an account actually uses, or
+    // "reset my password" sends a working account's reset link to a
+    // different address than the one that account actually signs in
+    // with. Falls back to the original synthetic
+    // `username@4bmobiles.app` pattern when no real email has been set
+    // up yet for this account (every account's Firebase Auth record
+    // was originally created with that synthetic email, so this keeps
+    // every not-yet-migrated account -- i.e. every employee account
+    // today -- signing in exactly as it always has).
+    String email;
+    try {
+      email = await _usernames.emailForUsername(username) ?? '$username@4bmobiles.app';
+    } catch (e, st) {
+      // A failed lookup must never block sign-in -- same fail-open
+      // reasoning used everywhere else PIN/auth-adjacent in this app.
+      AppLogger.error('LoginBloc._onSubmitted (username lookup)', e, st);
+      email = '$username@4bmobiles.app';
+    }
 
     try {
       final credential =
