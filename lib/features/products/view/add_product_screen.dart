@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/constants/shop_constants.dart';
 import '../../../core/models/product.dart';
+import '../../../core/repositories/product_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/confirm_delete_dialog.dart';
@@ -9,6 +11,7 @@ import '../../../core/widgets/lookup_picker_dialog.dart';
 import '../bloc/add_product_bloc.dart';
 import '../bloc/add_product_event.dart';
 import '../bloc/add_product_state.dart';
+import 'barcode_scanner_screen.dart';
 
 /// Add Product form — matches the design canvas exactly: photo upload
 /// box, Product Name / Category / Brand / Price / Stock Qty / SKU-IMEI
@@ -16,6 +19,12 @@ import '../bloc/add_product_state.dart';
 /// description box. Category and Brand now open a live Firestore-backed
 /// picker (with a built-in "+ Add New") instead of showing a fixed
 /// value, and Save actually writes the product to Firestore.
+///
+/// Also has a dedicated Barcode field: scan an existing label with the
+/// camera (checks it against this shop's own products first -- if it's
+/// already someone else's product, offers to open that one instead of
+/// silently overwriting it) or leave it blank and Save will generate a
+/// unique internal barcode for this product automatically.
 class AddProductScreen extends StatelessWidget {
   /// Null when adding a brand-new product (the normal case, from the
   /// Products list's + button or Dashboard's quick action). Passing an
@@ -67,11 +76,17 @@ class _AddProductViewState extends State<_AddProductView> {
   final _priceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
   final _skuCtrl = TextEditingController();
+  final _barcodeCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
 
   String? _category;
   String? _brand;
   _Condition _condition = _Condition.new_;
+
+  // True while a just-scanned barcode is being looked up against this
+  // shop's existing products -- shown as a small spinner on the scan
+  // button so a slow connection doesn't look like a dead tap.
+  bool _checkingBarcode = false;
 
   bool get _isEditing => widget.product != null;
 
@@ -89,6 +104,7 @@ class _AddProductViewState extends State<_AddProductView> {
         product.price == product.price.roundToDouble() ? product.price.toStringAsFixed(0) : product.price.toString();
     _stockCtrl.text = product.stockQty.toString();
     _skuCtrl.text = product.sku;
+    _barcodeCtrl.text = product.barcode;
     _descCtrl.text = product.description;
     _category = product.category.isEmpty ? null : product.category;
     _brand = product.brand.isEmpty ? null : product.brand;
@@ -104,6 +120,7 @@ class _AddProductViewState extends State<_AddProductView> {
     _priceCtrl.dispose();
     _stockCtrl.dispose();
     _skuCtrl.dispose();
+    _barcodeCtrl.dispose();
     _descCtrl.dispose();
     super.dispose();
   }
@@ -132,6 +149,63 @@ class _AddProductViewState extends State<_AddProductView> {
     if (picked != null) setState(() => _brand = picked);
   }
 
+  /// Opens the camera scanner, then checks the scanned code against
+  /// this shop's existing products:
+  /// - Already belongs to a *different* product → offer to open that
+  ///   product instead of letting this form silently reuse its barcode.
+  /// - Not found (or it's this same product, while editing) → just
+  ///   drop the scanned code into the Barcode field, same as typing it.
+  Future<void> _scanBarcode(BuildContext context) async {
+    final code = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (code == null || code.trim().isEmpty || !context.mounted) return;
+    final scanned = code.trim();
+
+    setState(() => _checkingBarcode = true);
+    Product? found;
+    try {
+      found = await ProductRepository().findByBarcode(scanned, shopId: currentShopId);
+    } catch (_) {
+      found = null;
+    }
+    if (!context.mounted) return;
+    setState(() => _checkingBarcode = false);
+
+    final isSelf = found != null && found.id == widget.product?.id;
+    // Snapshot into a fresh `final` instead of reassigning `found` from
+    // here on, so the null-check below stays straightforwardly safe.
+    final matchedProduct = isSelf ? null : found;
+
+    if (matchedProduct != null) {
+      final open = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Product already exists'),
+          content: Text(
+            '"${matchedProduct.name}" already uses this barcode.\n'
+            'Current stock: ${matchedProduct.stockQty}.\n\n'
+            'Open it to update stock or details instead?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Open Product')),
+          ],
+        ),
+      );
+      if (open == true && context.mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => AddProductScreen(product: matchedProduct)),
+        );
+      }
+      return;
+    }
+
+    setState(() => _barcodeCtrl.text = scanned);
+  }
+
   void _save(BuildContext context) {
     context.read<AddProductBloc>().add(
           AddProductSubmitted(
@@ -143,6 +217,7 @@ class _AddProductViewState extends State<_AddProductView> {
             sku: _skuCtrl.text,
             condition: _condition.label,
             description: _descCtrl.text,
+            barcode: _barcodeCtrl.text,
             productId: widget.product?.id,
           ),
         );
@@ -179,9 +254,13 @@ class _AddProductViewState extends State<_AddProductView> {
             ..showSnackBar(SnackBar(content: Text(state.errorMessage!), backgroundColor: AppColors.danger));
         }
         if (state.isSuccess) {
+          // Only worth calling out the barcode on a brand-new product --
+          // if it was auto-generated, this is the one moment the person
+          // actually sees it before it's just a value on the product.
+          final barcodeNote = (!_isEditing && (state.savedBarcode ?? '').isNotEmpty) ? ' · Barcode: ${state.savedBarcode}' : '';
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
-            ..showSnackBar(SnackBar(content: Text(_isEditing ? 'Product updated' : 'Product saved')));
+            ..showSnackBar(SnackBar(content: Text('${_isEditing ? 'Product updated' : 'Product saved'}$barcodeNote')));
           Navigator.pop(context);
         }
         if (state.isDeleted) {
@@ -395,10 +474,13 @@ class _AddProductViewState extends State<_AddProductView> {
                                 ),
                               ),
                             ),
-                            // Visual only for now — no camera/scanner wired up
-                            // yet, typing the SKU/IMEI by hand still works.
+                            // Still a placeholder -- this is the phone's
+                            // IMEI (a free-text identifier), kept deliberately
+                            // simple per the "no per-unit IMEI tracking yet"
+                            // decision. The working scanner lives on the new
+                            // Barcode field below instead.
                             GestureDetector(
-                              onTap: () => _comingSoon(context, 'Barcode scan'),
+                              onTap: () => _comingSoon(context, 'IMEI scan'),
                               child: Container(
                                 width: 30,
                                 height: 30,
@@ -407,6 +489,50 @@ class _AddProductViewState extends State<_AddProductView> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: AppColors.accent),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _FieldLabel('Barcode', palette: p),
+                      const SizedBox(height: 7),
+                      _FieldBox(
+                        palette: p,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _barcodeCtrl,
+                                style: _fieldStyle(p),
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  hintText: 'Scan, or leave blank to auto-generate',
+                                  hintStyle: TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: _checkingBarcode ? null : () => _scanBarcode(context),
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: AppColors.iconTint,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: _checkingBarcode
+                                    ? const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation(AppColors.accent),
+                                        ),
+                                      )
+                                    : const Icon(Icons.qr_code_scanner_rounded, size: 16, color: AppColors.accent),
                               ),
                             ),
                           ],
@@ -588,13 +714,18 @@ class _SelectRow extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 14,
-                color: isPlaceholder ? const Color(0xFF9C9CA6) : palette.textPrimary,
+            Expanded(
+              child: Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isPlaceholder ? const Color(0xFF9C9CA6) : palette.textPrimary,
+                ),
               ),
             ),
+            const SizedBox(width: 6),
             const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF9C9CA6)),
           ],
         ),

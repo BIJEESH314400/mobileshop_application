@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import '../../product_requests/view/add_request_screen.dart';
+import '../../products/view/barcode_scanner_screen.dart';
 import '../bloc/sales_bloc.dart';
 import '../bloc/sales_event.dart';
 import '../bloc/sales_state.dart';
@@ -148,27 +149,58 @@ class _SalesViewState extends State<_SalesView> {
                             ),
                             const SizedBox(height: 10),
                           ],
-                        GestureDetector(
-                          onTap: () => _openProductPicker(context),
-                          child: Container(
-                            height: 48,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFD8D8E0), width: 1.5, style: BorderStyle.solid),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.add_rounded, size: 16, color: AppColors.accent),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Add Product',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => _scanBarcode(context),
+                                child: Container(
+                                  height: 48,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accent,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.qr_code_scanner_rounded, size: 16, color: Colors.white),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Scan Barcode',
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => _openProductPicker(context),
+                                child: Container(
+                                  height: 48,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFD8D8E0), width: 1.5, style: BorderStyle.solid),
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.add_rounded, size: 16, color: AppColors.accent),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Add Product',
+                                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.accent),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 18),
                         Text(
@@ -370,6 +402,43 @@ class _SalesViewState extends State<_SalesView> {
         },
       ),
     );
+  }
+
+  /// Opens the shared camera scanner, then looks the scanned code up
+  /// against this shop's own already-loaded product list (the same
+  /// live list the "Add Product" picker below uses) rather than making
+  /// a separate Firestore round-trip for it -- it's already in memory
+  /// and already kept current by SalesBloc's own subscription.
+  ///
+  /// A match goes straight into the cart via the existing
+  /// SaleItemAdded event, so it gets the exact same stock-capping and
+  /// "only N in stock"/"out of stock" error handling as picking that
+  /// same product manually -- no separate code path to keep in sync.
+  /// No match just shows a plain error and leaves the cart untouched;
+  /// manual search (the "Add Product" button) is always right there
+  /// as a fallback.
+  Future<void> _scanBarcode(BuildContext context) async {
+    final code = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const BarcodeScannerScreen()),
+    );
+    if (code == null || code.trim().isEmpty || !context.mounted) return;
+    final scanned = code.trim();
+
+    final bloc = context.read<SalesBloc>();
+    final matches = bloc.state.availableProducts.where((product) => product.barcode == scanned);
+    final product = matches.isEmpty ? null : matches.first;
+
+    if (product == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(
+          content: Text("Barcode not recognized — try Add Product to search manually"),
+          backgroundColor: AppColors.danger,
+        ));
+      return;
+    }
+
+    bloc.add(SaleItemAdded(product));
   }
 
   void _openProductPicker(BuildContext context) {

@@ -43,15 +43,19 @@ class AddProductBloc extends Bloc<AddProductEvent, AddProductState> {
         condition: event.condition,
         description: event.description.trim(),
         shopId: currentShopId,
+        barcode: event.barcode.trim(),
         createdAt: null, // set server-side — see Product.toMap()
       );
 
+      String? savedBarcode;
       if (event.productId == null) {
-        await _repository.addProduct(product);
+        final saved = await _repository.addProduct(product);
+        savedBarcode = saved.barcode;
       } else {
-        await _repository.updateProduct(event.productId!, product);
+        final saved = await _repository.updateProduct(event.productId!, product);
+        savedBarcode = saved.barcode;
       }
-      emit(state.copyWith(isSubmitting: false, isSuccess: true));
+      emit(state.copyWith(isSubmitting: false, isSuccess: true, savedBarcode: savedBarcode));
     } catch (_) {
       emit(state.copyWith(
         isSubmitting: false,

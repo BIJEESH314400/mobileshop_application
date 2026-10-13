@@ -43,8 +43,18 @@ class AppBottomNav extends StatelessWidget {
     final activeColor = isDark ? AppColors.activeDark : AppColors.accent;
     final activeBg = isDark ? AppColors.activeDark.withOpacity(0.16) : AppColors.iconTint;
 
+    // Android 15 (targeting SDK 35) stopped automatically reserving
+    // space for the gesture-navigation bar/pill -- content now draws
+    // edge-to-edge by default, so a fixed 12px bottom margin that used
+    // to clear the system bar on older Android now sits the bar (and
+    // this nav) right on top of the gesture pill. Adding the device's
+    // own reported bottom inset keeps this floating above it on every
+    // Android version, old 3-button nav bars included (inset is 0
+    // there, so this is a no-op on those devices).
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + bottomInset),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(

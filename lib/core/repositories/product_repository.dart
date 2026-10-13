@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../models/product.dart';
@@ -35,27 +37,125 @@ class ProductRepository {
     });
   }
 
-  /// Creates a new product document. Firestore assigns the document id
-  /// automatically — the `id` field on the `Product` passed in isn't
-  /// used for anything here.
-  Future<void> addProduct(Product product) {
-    return _products.add(product.toMap());
+  /// Creates a new product document and returns it back with its real
+  /// Firestore id and (if one wasn't typed/scanned in) its freshly
+  /// generated barcode filled in, so the caller can show it to the
+  /// person right after Save.
+  ///
+  /// Uses `_products.doc()` (pre-allocates an id client-side, the same
+  /// Firestore-generated random id `.add()` would have used) instead of
+  /// `.add()` so the new document has a real id to write in one shot,
+  /// same as before. The barcode itself no longer comes from that id
+  /// (see `_generateInternalBarcode`'s own doc comment for why).
+  Future<Product> addProduct(Product product) async {
+    final docRef = _products.doc();
+    final barcode = product.barcode.trim().isEmpty
+        ? await _generateInternalBarcode(shopId: product.shopId)
+        : product.barcode.trim();
+
+    final toSave = Product(
+      id: docRef.id,
+      name: product.name,
+      category: product.category,
+      brand: product.brand,
+      price: product.price,
+      stockQty: product.stockQty,
+      sku: product.sku,
+      condition: product.condition,
+      description: product.description,
+      shopId: product.shopId,
+      barcode: barcode,
+    );
+    await docRef.set(toSave.toMap());
+    return toSave;
   }
 
-  /// Updates an existing product document in place. Deliberately drops
-  /// `createdAt` from the map first -- `toMap()` stamps it with
-  /// `FieldValue.serverTimestamp()`, which is correct for a brand-new
-  /// product but would silently reset the original creation time (and
-  /// therefore its position in "newest first" lists) every time someone
-  /// just fixes a typo or updates the stock count.
-  Future<void> updateProduct(String id, Product product) {
-    final data = product.toMap()..remove('createdAt');
-    return _products.doc(id).update(data);
+  /// Updates an existing product document in place, and returns the
+  /// saved product back (mirroring `addProduct`) so a caller can see
+  /// its final barcode. Deliberately drops `createdAt` from the map
+  /// first -- `toMap()` stamps it with `FieldValue.serverTimestamp()`,
+  /// which is correct for a brand-new product but would silently reset
+  /// the original creation time (and therefore its position in
+  /// "newest first" lists) every time someone just fixes a typo or
+  /// updates the stock count.
+  ///
+  /// Also mints a barcode here if `product.barcode` is still blank --
+  /// covers products saved before the Barcode field existed: simply
+  /// opening one and tapping Save (without touching Barcode at all)
+  /// gives it a real, reusable barcode, same as a brand-new product
+  /// gets one on its first Save.
+  Future<Product> updateProduct(String id, Product product) async {
+    final barcode = product.barcode.trim().isEmpty
+        ? await _generateInternalBarcode(shopId: product.shopId)
+        : product.barcode.trim();
+    final toSave = Product(
+      id: id,
+      name: product.name,
+      category: product.category,
+      brand: product.brand,
+      price: product.price,
+      stockQty: product.stockQty,
+      sku: product.sku,
+      condition: product.condition,
+      description: product.description,
+      shopId: product.shopId,
+      barcode: barcode,
+    );
+    final data = toSave.toMap()..remove('createdAt');
+    await _products.doc(id).update(data);
+    return toSave;
   }
 
   /// Permanently removes a product. There's no undo -- the caller is
   /// responsible for confirming with the person first.
   Future<void> deleteProduct(String id) {
     return _products.doc(id).delete();
+  }
+
+  /// Looks up a single product by its barcode, scoped to one shop --
+  /// this is what lets Add Product (and, later, Sales/POS) tell "this
+  /// barcode is already one of our products" apart from "never seen
+  /// this one before, treat it as new". Both filters here are plain
+  /// equality (`isEqualTo`), so this doesn't need a composite index
+  /// created in the Firebase console -- Firestore covers combinations of
+  /// equality-only filters with its automatic single-field indexes.
+  Future<Product?> findByBarcode(String barcode, {required String shopId}) async {
+    final trimmed = barcode.trim();
+    if (trimmed.isEmpty) return null;
+    final snapshot =
+        await _products.where('shopId', isEqualTo: shopId).where('barcode', isEqualTo: trimmed).limit(1).get();
+    if (snapshot.docs.isEmpty) return null;
+    final doc = snapshot.docs.first;
+    return Product.fromMap(doc.id, doc.data());
+  }
+
+  /// Generates a short, random, all-digit barcode and confirms (via
+  /// `findByBarcode`) that this shop doesn't already have a product
+  /// using it, retrying a few times on the astronomically unlikely
+  /// chance of a clash.
+  ///
+  /// The first version of this reused the product's own ~20-character
+  /// Firestore document id (prefixed "4B") -- simple and free of any
+  /// collision risk, but it turned out to scan unreliably in practice:
+  /// a camera (especially scanning a shared/recompressed photo of a
+  /// label rather than the original print) struggles with how thin the
+  /// bars have to get to fit 20+ alphanumeric characters into a small
+  /// sticker. A 10-digit numeric code needs roughly half as many bars
+  /// for the same physical width -- the same reason real retail
+  /// barcodes (EAN/UPC) are all-digit rather than alphanumeric -- which
+  /// is the single biggest lever for real-world scan reliability at
+  /// sticker size. The tiny bit of added latency (one extra Firestore
+  /// read, only when Barcode was left blank) is worth it for that.
+  Future<String> _generateInternalBarcode({required String shopId}) async {
+    final random = Random();
+    for (var attempt = 0; attempt < 5; attempt++) {
+      final code = List.generate(10, (_) => random.nextInt(10)).join();
+      final existing = await findByBarcode(code, shopId: shopId);
+      if (existing == null) return code;
+    }
+    // Essentially unreachable (a 1-in-10-billion clash, five times in a
+    // row) -- falls back to the old scheme, which stays guaranteed
+    // unique even here since it's derived from a fresh Firestore id.
+    return '4B${_products.doc().id}';
   }
 }

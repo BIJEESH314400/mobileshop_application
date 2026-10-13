@@ -20,6 +20,11 @@ class AddProductSubmitted extends AddProductEvent {
   final String condition;
   final String description;
 
+  /// Whatever's in the Barcode field -- a scanned code, one typed by
+  /// hand, or blank. Blank means "generate one for me", handled in the
+  /// Bloc/Repository, not here.
+  final String barcode;
+
   /// Null when adding a brand-new product. When editing an existing one,
   /// this carries its Firestore document id so the Bloc updates that
   /// document in place instead of creating a new one.
@@ -34,12 +39,13 @@ class AddProductSubmitted extends AddProductEvent {
     required this.sku,
     required this.condition,
     required this.description,
+    this.barcode = '',
     this.productId,
   });
 
   @override
   List<Object?> get props =>
-      [name, category, brand, price, stockQty, sku, condition, description, productId];
+      [name, category, brand, price, stockQty, sku, condition, description, barcode, productId];
 }
 
 /// Fired when "Delete" is tapped and confirmed on an existing product's

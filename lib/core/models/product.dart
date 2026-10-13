@@ -18,6 +18,14 @@ class Product extends Equatable {
   final String shopId;
   final DateTime? createdAt;
 
+  /// This product's barcode — either scanned from a real product
+  /// package, or an internally-generated one for products that don't
+  /// come with their own (see `ProductRepository.addProduct`). Defaults
+  /// to '' so every place that already constructs a `Product` without
+  /// knowing about this field keeps compiling unchanged; '' means "no
+  /// barcode yet", same convention as an empty `sku`.
+  final String barcode;
+
   const Product({
     required this.id,
     required this.name,
@@ -30,6 +38,7 @@ class Product extends Equatable {
     required this.description,
     required this.shopId,
     this.createdAt,
+    this.barcode = '',
   });
 
   /// Builds a Product from a Firestore document. `id` comes from
@@ -49,6 +58,10 @@ class Product extends Equatable {
       description: map['description'] as String? ?? '',
       shopId: map['shopId'] as String? ?? '',
       createdAt: rawCreatedAt is Timestamp ? rawCreatedAt.toDate() : null,
+      // Older product documents, saved before this field existed, simply
+      // don't have it -- '' is the correct read for those, same
+      // "missing means not set yet" convention as every other field here.
+      barcode: map['barcode'] as String? ?? '',
     );
   }
 
@@ -69,6 +82,7 @@ class Product extends Equatable {
       'description': description,
       'shopId': shopId,
       'createdAt': FieldValue.serverTimestamp(),
+      'barcode': barcode,
     };
   }
 
@@ -85,5 +99,6 @@ class Product extends Equatable {
         description,
         shopId,
         createdAt,
+        barcode,
       ];
 }

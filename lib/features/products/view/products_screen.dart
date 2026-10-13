@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
 import 'add_product_screen.dart';
+import 'barcode_labels_screen.dart';
 import '../bloc/products_bloc.dart';
 import '../bloc/products_event.dart';
 import '../bloc/products_state.dart';
@@ -17,7 +18,8 @@ import '../bloc/products_state.dart';
 /// reorder before a customer asks for something that's sold out.
 const int _lowStockThreshold = 5;
 
-final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
+final _priceFormat =
+    NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
 
 /// Products — list and category pills come from Firestore via
 /// ProductsBloc, live-updating whenever a product is added/changed
@@ -66,11 +68,17 @@ class _ProductsViewState extends State<_ProductsView> {
         // Categories pills still come from the full unfiltered list --
         // searching shouldn't make a pill disappear out from under the
         // owner mid-type.
-        final categories = state.products.map((product) => product.category).toSet().toList()..sort();
+        final categories = state.products
+            .map((product) => product.category)
+            .toSet()
+            .toList()
+          ..sort();
         final searched = state.filteredProducts;
         final products = _selectedCategory == null
             ? searched
-            : searched.where((product) => product.category == _selectedCategory).toList();
+            : searched
+                .where((product) => product.category == _selectedCategory)
+                .toList();
 
         return Scaffold(
           backgroundColor: p.background,
@@ -89,9 +97,30 @@ class _ProductsViewState extends State<_ProductsView> {
                               Expanded(
                                 child: Text(
                                   'Products',
-                                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: p.textPrimary),
+                                  style: TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: p.textPrimary),
                                 ),
                               ),
+                              GestureDetector(
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                      builder: (_) => const BarcodeLabelsScreen()),
+                                ),
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: BoxDecoration(
+                                    color: p.card,
+                                    borderRadius: BorderRadius.circular(11),
+                                    border: Border.all(color: p.border),
+                                  ),
+                                  child: Icon(Icons.qr_code_2_rounded,
+                                      size: 18, color: p.textPrimary),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () => _comingSoon(context, 'Filters'),
                                 child: Container(
@@ -102,7 +131,8 @@ class _ProductsViewState extends State<_ProductsView> {
                                     borderRadius: BorderRadius.circular(11),
                                     border: Border.all(color: p.border),
                                   ),
-                                  child: Icon(Icons.filter_list_rounded, size: 18, color: p.textPrimary),
+                                  child: Icon(Icons.filter_list_rounded,
+                                      size: 18, color: p.textPrimary),
                                 ),
                               ),
                             ],
@@ -118,19 +148,24 @@ class _ProductsViewState extends State<_ProductsView> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.search_rounded, size: 18, color: p.textSecondary),
+                                Icon(Icons.search_rounded,
+                                    size: 18, color: p.textSecondary),
                                 const SizedBox(width: 9),
                                 Expanded(
                                   child: TextField(
                                     controller: _searchController,
-                                    onChanged: (value) =>
-                                        context.read<ProductsBloc>().add(ProductsSearchChanged(value)),
-                                    style: TextStyle(color: p.textPrimary, fontSize: 13.5),
+                                    onChanged: (value) => context
+                                        .read<ProductsBloc>()
+                                        .add(ProductsSearchChanged(value)),
+                                    style: TextStyle(
+                                        color: p.textPrimary, fontSize: 13.5),
                                     decoration: InputDecoration(
                                       isDense: true,
                                       border: InputBorder.none,
                                       hintText: 'Search products, SKU or brand',
-                                      hintStyle: TextStyle(color: p.textSecondary, fontSize: 13.5),
+                                      hintStyle: TextStyle(
+                                          color: p.textSecondary,
+                                          fontSize: 13.5),
                                     ),
                                   ),
                                 ),
@@ -149,7 +184,8 @@ class _ProductsViewState extends State<_ProductsView> {
                                     palette: p,
                                     label: 'All',
                                     selected: _selectedCategory == null,
-                                    onTap: () => setState(() => _selectedCategory = null),
+                                    onTap: () => setState(
+                                        () => _selectedCategory = null),
                                   ),
                                   for (final category in categories) ...[
                                     const SizedBox(width: 6),
@@ -157,7 +193,8 @@ class _ProductsViewState extends State<_ProductsView> {
                                       palette: p,
                                       label: category,
                                       selected: _selectedCategory == category,
-                                      onTap: () => setState(() => _selectedCategory = category),
+                                      onTap: () => setState(
+                                          () => _selectedCategory = category),
                                     ),
                                   ],
                                 ],
@@ -174,7 +211,8 @@ class _ProductsViewState extends State<_ProductsView> {
                   right: 20,
                   bottom: 20,
                   child: GestureDetector(
-                    onTap: () => Navigator.pushNamed(context, AppRoutes.addProduct),
+                    onTap: () =>
+                        Navigator.pushNamed(context, AppRoutes.addProduct),
                     child: Container(
                       width: 54,
                       height: 54,
@@ -182,10 +220,14 @@ class _ProductsViewState extends State<_ProductsView> {
                         color: AppColors.accent,
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: AppColors.accent.withOpacity(0.35), blurRadius: 20, offset: const Offset(0, 8)),
+                          BoxShadow(
+                              color: AppColors.accent.withOpacity(0.35),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8)),
                         ],
                       ),
-                      child: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
+                      child: const Icon(Icons.add_rounded,
+                          color: Colors.white, size: 24),
                     ),
                   ),
                 ),
@@ -198,7 +240,8 @@ class _ProductsViewState extends State<_ProductsView> {
     );
   }
 
-  Widget _buildBody(BuildContext context, AppPalette p, ProductsState state, List<Product> products) {
+  Widget _buildBody(BuildContext context, AppPalette p, ProductsState state,
+      List<Product> products) {
     if (state.isLoading && state.products.isEmpty) {
       return const Center(child: CircularProgressIndicator(strokeWidth: 2.4));
     }
@@ -210,11 +253,17 @@ class _ProductsViewState extends State<_ProductsView> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(state.errorMessage!, textAlign: TextAlign.center, style: TextStyle(color: p.textSecondary, fontSize: 14)),
+              Text(state.errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: p.textSecondary, fontSize: 14)),
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () => context.read<ProductsBloc>().add(const ProductsSubscriptionRequested()),
-                child: const Text('Retry', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w700)),
+                onPressed: () => context
+                    .read<ProductsBloc>()
+                    .add(const ProductsSubscriptionRequested()),
+                child: const Text('Retry',
+                    style: TextStyle(
+                        color: AppColors.accent, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -247,7 +296,8 @@ class _ProductsViewState extends State<_ProductsView> {
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 100),
       itemCount: products.length,
       separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, i) => _ProductCard(palette: p, product: products[i]),
+      itemBuilder: (context, i) =>
+          _ProductCard(palette: p, product: products[i]),
     );
   }
 }
@@ -284,7 +334,9 @@ class _FilterPill extends StatelessWidget {
         // after onTap()'s setState has rebuilt the row.
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (context.mounted) {
-            Scrollable.ensureVisible(context, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+            Scrollable.ensureVisible(context,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut);
           }
         });
       },
@@ -294,7 +346,8 @@ class _FilterPill extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? AppColors.accent : palette.card,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: selected ? AppColors.accent : palette.border),
+          border:
+              Border.all(color: selected ? AppColors.accent : palette.border),
         ),
         child: Text(
           label,
@@ -313,6 +366,7 @@ class _StockStyle {
   final Color bg;
   final Color fg;
   final String label;
+
   const _StockStyle(this.bg, this.fg, this.label);
 }
 
@@ -324,18 +378,23 @@ class _ProductCard extends StatelessWidget {
 
   _StockStyle get _stockStyle {
     if (product.stockQty <= 0) {
-      return const _StockStyle(AppColors.dangerBg, AppColors.danger, 'Out of Stock');
+      return const _StockStyle(
+          AppColors.dangerBg, AppColors.danger, 'Out of Stock');
     }
     if (product.stockQty <= _lowStockThreshold) {
-      return const _StockStyle(AppColors.warningBg, AppColors.warningText, 'Low Stock');
+      return const _StockStyle(
+          AppColors.warningBg, AppColors.warningText, 'Low Stock');
     }
-    return const _StockStyle(AppColors.successBg, AppColors.success, 'In Stock');
+    return const _StockStyle(
+        AppColors.successBg, AppColors.success, 'In Stock');
   }
 
   @override
   Widget build(BuildContext context) {
     final s = _stockStyle;
-    final spec = [product.brand, product.condition].where((part) => part.isNotEmpty).join(' · ');
+    final spec = [product.brand, product.condition]
+        .where((part) => part.isNotEmpty)
+        .join(' · ');
 
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
@@ -360,7 +419,8 @@ class _ProductCard extends StatelessWidget {
               // A single generic icon for every product — categories are
               // open-ended now (owner-managed via the picker), so there's
               // no fixed list to map onto specific icons.
-              child: const Icon(Icons.inventory_2_outlined, size: 24, color: AppColors.accent),
+              child: const Icon(Icons.inventory_2_outlined,
+                  size: 24, color: AppColors.accent),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -369,19 +429,28 @@ class _ProductCard extends StatelessWidget {
                 children: [
                   Text(
                     product.name,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: palette.textPrimary),
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: palette.textPrimary),
                   ),
                   const SizedBox(height: 3),
                   if (spec.isNotEmpty) ...[
                     Text(
                       spec,
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: palette.textSecondary),
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: palette.textSecondary),
                     ),
                     const SizedBox(height: 2),
                   ],
                   Text(
                     _priceFormat.format(product.price),
-                    style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: palette.textPrimary),
+                    style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: palette.textPrimary),
                   ),
                 ],
               ),
@@ -390,15 +459,21 @@ class _ProductCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                  decoration: BoxDecoration(color: s.bg, borderRadius: BorderRadius.circular(999)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: s.bg, borderRadius: BorderRadius.circular(999)),
                   child: Text(
                     s.label,
-                    style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: s.fg),
+                    style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        color: s.fg),
                   ),
                 ),
                 const SizedBox(height: 10),
-                Icon(Icons.chevron_right_rounded, size: 18, color: palette.textSecondary),
+                Icon(Icons.chevron_right_rounded,
+                    size: 18, color: palette.textSecondary),
               ],
             ),
           ],
