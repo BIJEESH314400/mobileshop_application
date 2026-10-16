@@ -30,7 +30,11 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
     on<SalesSubscriptionRequested>(_onSubscriptionRequested);
     on<SalesCustomersSubscriptionRequested>(_onCustomersSubscriptionRequested);
     on<SaleItemAdded>(_onItemAdded);
-    on<SaleItemQtyChanged>(_onQtyChanged);
+    on<SaleItemScannedAdded>(_onScannedAdded);
+    on<SaleItemUnitRemoved>(_onUnitRemoved);
+    on<SaleItemSlotVerified>(_onSlotVerified);
+    on<SaleItemSlotRemoved>(_onSlotRemoved);
+    on<SaleItemQuickRemove>(_onQuickRemove);
     on<SaleItemRemoved>(_onItemRemoved);
     on<SaleDiscountChanged>(_onDiscountChanged);
     on<SalePaymentMethodChanged>(_onPaymentMethodChanged);
@@ -111,7 +115,7 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
         return;
       }
       final updated = [...state.cartItems];
-      updated[index] = existing.copyWith(qty: existing.qty + 1);
+      updated[index] = existing.copyWith(slots: [...existing.slots, _nextSlotFor(existing)]);
       emit(state.copyWith(cartItems: updated, isSuccess: false, clearError: true));
       return;
     }
@@ -128,8 +132,10 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
           productId: product.id,
           name: product.name,
           price: product.price,
-          qty: 1,
           availableStock: product.stockQty,
+          barcode: product.barcode,
+          tracksUniqueUnits: product.tracksUniqueUnits,
+          slots: const [CartUnitSlot()],
         ),
       ],
       isSuccess: false,
@@ -137,21 +143,175 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
     ));
   }
 
-  void _onQtyChanged(SaleItemQtyChanged event, Emitter<SalesState> emit) {
+  /// Same shape as _onItemAdded above, except the new slot starts out
+  /// already verified (barcode + optional unitId already resolved by
+  /// the View -- see `_resolveBarcode` in sales_screen.dart) rather
+  /// than pending, since a real scan just happened for it.
+  void _onScannedAdded(SaleItemScannedAdded event, Emitter<SalesState> emit) {
+    final product = event.product;
+    final index = state.cartItems.indexWhere((item) => item.productId == product.id);
+    final newSlot = CartUnitSlot(barcode: event.barcode, unitId: event.unitId);
+
+    if (index >= 0) {
+      final existing = state.cartItems[index];
+      if (existing.qty >= product.stockQty) {
+        emit(state.copyWith(errorMessage: 'Only ${product.stockQty} of ${product.name} in stock'));
+        return;
+      }
+      final grownSlots = _verifyWholeLineIfBulk(
+        tracksUniqueUnits: existing.tracksUniqueUnits,
+        slots: [...existing.slots, newSlot],
+        barcode: event.barcode,
+      );
+      final updated = [...state.cartItems];
+      updated[index] = existing.copyWith(slots: grownSlots);
+      emit(state.copyWith(cartItems: updated, isSuccess: false, clearError: true));
+      return;
+    }
+
+    if (product.stockQty <= 0) {
+      emit(state.copyWith(errorMessage: '${product.name} is out of stock'));
+      return;
+    }
+
+    emit(state.copyWith(
+      cartItems: [
+        ...state.cartItems,
+        CartItem(
+          productId: product.id,
+          name: product.name,
+          price: product.price,
+          availableStock: product.stockQty,
+          barcode: product.barcode,
+          tracksUniqueUnits: product.tracksUniqueUnits,
+          slots: [newSlot],
+        ),
+      ],
+      isSuccess: false,
+      clearError: true,
+    ));
+  }
+
+  /// Drops the single most-recently-added slot from a line -- a
+  /// still-pending one if there is one (nothing confirmed is lost by
+  /// undoing an unconfirmed add), otherwise the last verified one.
+  /// Removes the whole line once its last slot is gone.
+  void _onUnitRemoved(SaleItemUnitRemoved event, Emitter<SalesState> emit) {
     final index = state.cartItems.indexWhere((item) => item.productId == event.productId);
     if (index < 0) return;
-
     final item = state.cartItems[index];
-    // int.clamp() returns num, not int, so the bounds are applied by
-    // hand here rather than risking a num/int assignment mismatch.
-    final cap = item.availableStock < 1 ? 1 : item.availableStock;
-    var newQty = item.qty + event.delta;
-    if (newQty < 1) newQty = 1;
-    if (newQty > cap) newQty = cap;
-    if (newQty == item.qty) return;
+    if (item.slots.isEmpty) return;
 
+    final slots = [...item.slots];
+    var removeAt = slots.lastIndexWhere((slot) => !slot.isVerified);
+    if (removeAt < 0) removeAt = slots.length - 1;
+    slots.removeAt(removeAt);
+
+    _applySlots(emit, index, event.productId, slots);
+  }
+
+  /// Fills one specific pending slot in with a barcode the View has
+  /// already looked up and validated. Silently ignored if the index is
+  /// out of range (the cart changed underneath an in-flight scan) --
+  /// same fail-quiet reasoning other index-based handlers below use.
+  void _onSlotVerified(SaleItemSlotVerified event, Emitter<SalesState> emit) {
+    final index = state.cartItems.indexWhere((item) => item.productId == event.productId);
+    if (index < 0) return;
+    final item = state.cartItems[index];
+    if (event.slotIndex < 0 || event.slotIndex >= item.slots.length) return;
+
+    final oneVerified = [...item.slots];
+    oneVerified[event.slotIndex] = CartUnitSlot(barcode: event.barcode, unitId: event.unitId);
+    final slots = _verifyWholeLineIfBulk(
+      tracksUniqueUnits: item.tracksUniqueUnits,
+      slots: oneVerified,
+      barcode: event.barcode,
+    );
     final updated = [...state.cartItems];
-    updated[index] = item.copyWith(qty: newQty);
+    updated[index] = item.copyWith(slots: slots);
+    emit(state.copyWith(cartItems: updated, isSuccess: false, clearError: true));
+  }
+
+  /// The barcode checklist's own "Remove" link on one specific unit
+  /// row -- drops exactly that slot, verified or still pending, which
+  /// also drops this line's qty by 1 (slots.length IS qty).
+  void _onSlotRemoved(SaleItemSlotRemoved event, Emitter<SalesState> emit) {
+    final index = state.cartItems.indexWhere((item) => item.productId == event.productId);
+    if (index < 0) return;
+    final item = state.cartItems[index];
+    if (event.slotIndex < 0 || event.slotIndex >= item.slots.length) return;
+
+    final slots = [...item.slots]..removeAt(event.slotIndex);
+    _applySlots(emit, index, event.productId, slots);
+  }
+
+  /// "-1" / "-2" quick-remove -- same slot-preference rule as
+  /// _onUnitRemoved, applied `count` times in a row.
+  void _onQuickRemove(SaleItemQuickRemove event, Emitter<SalesState> emit) {
+    final index = state.cartItems.indexWhere((item) => item.productId == event.productId);
+    if (index < 0) return;
+    final item = state.cartItems[index];
+
+    final slots = [...item.slots];
+    var remaining = event.count;
+    while (remaining > 0 && slots.isNotEmpty) {
+      var removeAt = slots.lastIndexWhere((slot) => !slot.isVerified);
+      if (removeAt < 0) removeAt = slots.length - 1;
+      slots.removeAt(removeAt);
+      remaining--;
+    }
+
+    _applySlots(emit, index, event.productId, slots);
+  }
+
+  /// What a freshly-added unit on an EXISTING line should start as.
+  /// A bulk product (tracksUniqueUnits == false) prints the exact
+  /// same barcode on every physical copy -- think a stack of identical
+  /// comic books -- so once this line already has ONE confirmed
+  /// barcode, a brand new unit of it is provably that same code and
+  /// doesn't need asking again. A unique-tracked product's units each
+  /// carry their own distinct code, so a new one always starts
+  /// pending regardless of what else is already confirmed on the
+  /// line.
+  CartUnitSlot _nextSlotFor(CartItem existing) {
+    if (existing.tracksUniqueUnits) return const CartUnitSlot();
+    for (final slot in existing.slots) {
+      if (slot.isVerified) return CartUnitSlot(barcode: slot.barcode);
+    }
+    return const CartUnitSlot();
+  }
+
+  /// For a bulk product, every slot on the line shares the one
+  /// printed barcode, so confirming it ANYWHERE on the line -- a
+  /// checklist Scan/Type, or the top Scan Barcode button adding one
+  /// more unit while others on the same line are still pending --
+  /// marks every slot on that line verified at once, not just the one
+  /// slot that triggered it. A unique-tracked product's slots are
+  /// returned unchanged, since each of its units genuinely needs its
+  /// own separate scan.
+  List<CartUnitSlot> _verifyWholeLineIfBulk({
+    required bool tracksUniqueUnits,
+    required List<CartUnitSlot> slots,
+    required String barcode,
+  }) {
+    if (tracksUniqueUnits) return slots;
+    return List.generate(slots.length, (_) => CartUnitSlot(barcode: barcode));
+  }
+
+  /// Shared tail end for every "remove some slots" handler above --
+  /// drops the whole line once its slot list is empty, otherwise just
+  /// updates it in place.
+  void _applySlots(Emitter<SalesState> emit, int index, String productId, List<CartUnitSlot> slots) {
+    if (slots.isEmpty) {
+      emit(state.copyWith(
+        cartItems: state.cartItems.where((item) => item.productId != productId).toList(),
+        isSuccess: false,
+        clearError: true,
+      ));
+      return;
+    }
+    final updated = [...state.cartItems];
+    updated[index] = state.cartItems[index].copyWith(slots: slots);
     emit(state.copyWith(cartItems: updated, isSuccess: false, clearError: true));
   }
 
@@ -177,6 +337,18 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
       return;
     }
 
+    // Every unit in the cart needs a confirmed barcode now (see
+    // CartUnitSlot) -- this is the bloc-level backstop for that rule;
+    // the UI also disables Complete Sale while any are pending, but
+    // this guard is what actually stops the sale from going through if
+    // that ever gets bypassed some other way.
+    if (!state.allBarcodesVerified) {
+      emit(state.copyWith(
+        errorMessage: 'Scan or type the barcode for every item before completing the sale',
+      ));
+      return;
+    }
+
     emit(state.copyWith(isSubmitting: true, clearError: true));
 
     try {
@@ -189,6 +361,9 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
                   name: item.name,
                   price: item.price,
                   qty: item.qty,
+                  barcode: item.barcode,
+                  unitIds: item.unitIds,
+                  unitBarcodes: item.unitBarcodes,
                 ))
             .toList(),
         subtotal: state.subtotal,

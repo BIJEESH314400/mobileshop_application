@@ -6,40 +6,101 @@ import '../../../core/models/product.dart';
 
 enum PaymentMethod { upi, card, cash }
 
-/// One line in the cart — a snapshot of a Product plus how many of it
-/// are being sold. `availableStock` is the product's stock at the
-/// moment it was added, used only to cap the qty stepper on screen;
-/// the check that actually matters happens server-side, inside
+/// One physical unit's spot in a cart line -- added the moment a
+/// product is tapped/scanned, confirmed afterward by scanning or
+/// typing its actual barcode. `barcode == null` means still pending
+/// (counted toward the line/cart's qty, but not yet toward what
+/// Complete Sale will actually accept). `unitId` is set only when the
+/// confirmed code turned out to be a specific ProductUnit's own code
+/// (see ProductUnit) rather than the product's plain shared barcode --
+/// that's what SaleRepository.completeSale uses to retire the right
+/// physical unit, same as before this redesign; a plain product's
+/// slots are confirmed by its one shared barcode and carry no unitId
+/// at all, since there's nothing more specific to retire.
+class CartUnitSlot extends Equatable {
+  final String? barcode;
+  final String? unitId;
+
+  const CartUnitSlot({this.barcode, this.unitId});
+
+  bool get isVerified => barcode != null && barcode!.isNotEmpty;
+
+  @override
+  List<Object?> get props => [barcode, unitId];
+}
+
+/// One line in the cart — a snapshot of a Product plus one [CartUnitSlot]
+/// per unit being sold. `availableStock` is the product's stock at the
+/// moment it was added, used only to cap how many slots can be added on
+/// screen; the check that actually matters happens server-side, inside
 /// SaleRepository's transaction, when the sale is completed.
+///
+/// Every unit in a sale now needs its own confirmed barcode before
+/// Complete Sale will go through (see SalesState.allBarcodesVerified) --
+/// this applies uniformly to a unique-tracked product (confirmed by its
+/// own per-unit code) and a plain one (confirmed by its shared product
+/// barcode, scanned/typed once per physical item) alike. `qty` is
+/// therefore no longer a typed/stepped number of its own -- it's always
+/// just how many slots this line currently has, verified or still
+/// pending.
 class CartItem extends Equatable {
   final String productId;
   final String name;
   final double price;
-  final int qty;
   final int availableStock;
+  final String barcode;
+
+  // Snapshot of Product.tracksUniqueUnits at the moment this line was
+  // started -- used only to pick the right hint text/placeholder in the
+  // barcode checklist (e.g. "scan this unit's own sticker" vs "scan
+  // this product's barcode"); the actual validation of a scanned/typed
+  // code doesn't need it, since looking the code up against
+  // product_units vs the product's own barcode already tells the real
+  // story either way.
+  final bool tracksUniqueUnits;
+
+  final List<CartUnitSlot> slots;
 
   const CartItem({
     required this.productId,
     required this.name,
     required this.price,
-    required this.qty,
     required this.availableStock,
+    this.barcode = '',
+    this.tracksUniqueUnits = false,
+    this.slots = const [],
   });
 
-  CartItem copyWith({int? qty}) {
+  int get qty => slots.length;
+
+  int get verifiedCount => slots.where((s) => s.isVerified).length;
+
+  int get pendingCount => qty - verifiedCount;
+
+  bool get allVerified => pendingCount == 0;
+
+  List<String> get unitIds =>
+      slots.where((s) => s.unitId != null).map((s) => s.unitId!).toList();
+
+  List<String> get unitBarcodes =>
+      slots.where((s) => s.isVerified).map((s) => s.barcode!).toList();
+
+  CartItem copyWith({List<CartUnitSlot>? slots}) {
     return CartItem(
       productId: productId,
       name: name,
       price: price,
-      qty: qty ?? this.qty,
       availableStock: availableStock,
+      barcode: barcode,
+      tracksUniqueUnits: tracksUniqueUnits,
+      slots: slots ?? this.slots,
     );
   }
 
   double get lineTotal => price * qty;
 
   @override
-  List<Object?> get props => [productId, name, price, qty, availableStock];
+  List<Object?> get props => [productId, name, price, availableStock, barcode, tracksUniqueUnits, slots];
 }
 
 class SalesState extends Equatable {
@@ -100,6 +161,12 @@ class SalesState extends Equatable {
   double get total => subtotal - discount + tax;
 
   int get itemCount => cartItems.fold(0, (sum, item) => sum + item.qty);
+
+  /// How many units across the WHOLE cart still need their barcode
+  /// scanned or typed in before Complete Sale will go through.
+  int get pendingBarcodeCount => cartItems.fold(0, (sum, item) => sum + item.pendingCount);
+
+  bool get allBarcodesVerified => pendingBarcodeCount == 0;
 
   SalesState copyWith({
     bool? isLoadingProducts,

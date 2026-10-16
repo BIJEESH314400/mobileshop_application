@@ -27,6 +27,7 @@ class SaleRepository {
 
   CollectionReference<Map<String, dynamic>> get _sales => _db.collection('sales');
   CollectionReference<Map<String, dynamic>> get _products => _db.collection('products');
+  CollectionReference<Map<String, dynamic>> get _units => _db.collection('product_units');
 
   /// Live feed of every completed sale for this shop, newest first.
   /// Client-sorted (like ProductRepository.watchProducts and
@@ -54,6 +55,22 @@ class SaleRepository {
       final productRefs = sale.items.map((item) => _products.doc(item.productId)).toList();
       final snapshots = await Future.wait(productRefs.map((ref) => txn.get(ref)));
 
+      // Every individually-tracked ProductUnit this sale touches
+      // (SaleItem.unitIds -- see that field's own doc comment),
+      // flattened to one ref per unit so each can be read here too
+      // (same "all reads before any write" transaction rule) and
+      // re-checked still 'available' below -- this is what actually
+      // guarantees a unit's code can never be sold/reused twice, even
+      // if two devices scan the same physical label at nearly the same
+      // moment.
+      final unitRefs = <DocumentReference<Map<String, dynamic>>>[];
+      for (final item in sale.items) {
+        for (final unitId in item.unitIds) {
+          unitRefs.add(_units.doc(unitId));
+        }
+      }
+      final unitSnapshots = await Future.wait(unitRefs.map((ref) => txn.get(ref)));
+
       for (var i = 0; i < sale.items.length; i++) {
         final item = sale.items[i];
         final snapshot = snapshots[i];
@@ -68,11 +85,28 @@ class SaleRepository {
         }
       }
 
+      for (final snapshot in unitSnapshots) {
+        final status = snapshot.data()?['status'] as String?;
+        if (!snapshot.exists || status != 'available') {
+          throw const InsufficientStockException(
+            'That unit was already sold on another device — please rescan',
+          );
+        }
+      }
+
       final saleRef = _sales.doc();
       txn.set(saleRef, sale.toMap());
 
       for (var i = 0; i < sale.items.length; i++) {
         txn.update(productRefs[i], {'stockQty': FieldValue.increment(-sale.items[i].qty)});
+      }
+
+      for (final ref in unitRefs) {
+        txn.update(ref, {
+          'status': 'sold',
+          'soldAt': FieldValue.serverTimestamp(),
+          'saleId': saleRef.id,
+        });
       }
     });
   }

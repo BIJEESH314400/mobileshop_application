@@ -18,9 +18,14 @@ class SalesSubscriptionRequested extends SalesEvent {
   const SalesSubscriptionRequested();
 }
 
-/// Fired when a product is picked from the "Add Product" sheet. Adds
-/// it to the cart at qty 1, or increments its qty if it's already
-/// there — capped either way at that product's current stock.
+/// Fired when a product is tapped in the "Add Product" sheet, or the
+/// cart card's own "+" -- adds ONE new, still-unverified (pending)
+/// unit slot to this product's line (starting a new line at qty 1 if
+/// it isn't in the cart yet), capped at the product's current stock.
+/// Works the same for every product now, unique-tracked or not -- see
+/// Product.tracksUniqueUnits's own doc comment for why that
+/// distinction no longer needs to gate adding at all, only how a
+/// slot's barcode later gets verified (SaleItemSlotVerified below).
 class SaleItemAdded extends SalesEvent {
   final Product product;
   const SaleItemAdded(this.product);
@@ -29,16 +34,85 @@ class SaleItemAdded extends SalesEvent {
   List<Object?> get props => [product];
 }
 
-/// +/- from a cart item's qty steppers. `delta` is +1 or -1.
-class SaleItemQtyChanged extends SalesEvent {
-  final String productId;
-  final int delta;
-  const SaleItemQtyChanged({required this.productId, required this.delta});
+/// Fired by the top "Scan Barcode" button once the View has already
+/// looked the scanned code up (see `_resolveBarcode` in
+/// sales_screen.dart) and confirmed a real match -- adds the product
+/// to the cart (or grows its line) with that ONE slot already
+/// verified, since a real scan just happened; no separate pending step
+/// needed for it. `unitId` is set only when the match was a specific
+/// ProductUnit's own code rather than the product's shared barcode.
+class SaleItemScannedAdded extends SalesEvent {
+  final Product product;
+  final String barcode;
+  final String? unitId;
+  const SaleItemScannedAdded({required this.product, required this.barcode, this.unitId});
 
   @override
-  List<Object?> get props => [productId, delta];
+  List<Object?> get props => [product, barcode, unitId];
 }
 
+/// The cart card's "-" -- drops the single most-recently-added slot
+/// from this product's line (a still-pending one if there is one,
+/// since nothing confirmed is lost by undoing an unconfirmed add;
+/// otherwise the last verified one). Removes the whole line once its
+/// last slot is gone, same as SaleItemRemoved.
+class SaleItemUnitRemoved extends SalesEvent {
+  final String productId;
+  const SaleItemUnitRemoved(this.productId);
+
+  @override
+  List<Object?> get props => [productId];
+}
+
+/// A specific pending slot's barcode, already resolved and validated
+/// by the View (see `_resolveBarcode`) -- fills that one slot in,
+/// whether it came from the camera (the slot's own Scan button) or the
+/// cashier typing it by hand (Type). `unitId` is set only for a real
+/// per-unit code, same as SaleItemScannedAdded above.
+class SaleItemSlotVerified extends SalesEvent {
+  final String productId;
+  final int slotIndex;
+  final String barcode;
+  final String? unitId;
+  const SaleItemSlotVerified({
+    required this.productId,
+    required this.slotIndex,
+    required this.barcode,
+    this.unitId,
+  });
+
+  @override
+  List<Object?> get props => [productId, slotIndex, barcode, unitId];
+}
+
+/// The "ITEM BARCODES" checklist's own "Remove" link on one specific
+/// unit row -- drops exactly that slot (verified or still pending),
+/// which also drops this line's qty by 1, same as the screen's own
+/// "removing a barcode updates the item's quantity automatically" note.
+class SaleItemSlotRemoved extends SalesEvent {
+  final String productId;
+  final int slotIndex;
+  const SaleItemSlotRemoved({required this.productId, required this.slotIndex});
+
+  @override
+  List<Object?> get props => [productId, slotIndex];
+}
+
+/// Quick "-1" / "-2" shortcut on a cart card -- removes that many of
+/// the line's most-recently-added slots in one tap (same end result as
+/// tapping SaleItemUnitRemoved that many times in a row, preferring
+/// still-pending slots first, same as that event).
+class SaleItemQuickRemove extends SalesEvent {
+  final String productId;
+  final int count;
+  const SaleItemQuickRemove({required this.productId, required this.count});
+
+  @override
+  List<Object?> get props => [productId, count];
+}
+
+/// The cart card's trash icon (or the barcode checklist's own "Delete
+/// all N" shortcut) -- removes the entire line, every slot at once.
 class SaleItemRemoved extends SalesEvent {
   final String productId;
   const SaleItemRemoved(this.productId);

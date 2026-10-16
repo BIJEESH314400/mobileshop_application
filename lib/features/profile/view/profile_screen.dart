@@ -271,6 +271,15 @@ class _ProfileViewState extends State<_ProfileView> {
                           label: 'Reports & Analytics',
                           onTap: () => Navigator.of(context).pushNamed(AppRoutes.reports),
                         ),
+                        // Only the owner decides which categories and
+                        // brands exist at all -- staff still freely
+                        // pick from the existing lists in Add Product.
+                        if (user == null || user.isOwner)
+                          _MenuRowData(
+                            icon: Icons.category_outlined,
+                            label: 'Manage Categories & Brands',
+                            onTap: () => Navigator.of(context).pushNamed(AppRoutes.manageCategories),
+                          ),
                         _MenuRowData(icon: Icons.credit_card_outlined, label: 'Payment Settings', onTap: () => _comingSoon('Payment Settings')),
                         _MenuRowData(icon: Icons.receipt_long_outlined, label: 'Tax & Invoice Settings', onTap: () => _comingSoon('Tax & Invoice Settings')),
                       ],

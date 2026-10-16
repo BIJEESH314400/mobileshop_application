@@ -15,6 +15,14 @@ class ProductRepository {
 
   CollectionReference<Map<String, dynamic>> get _products => _db.collection('products');
 
+  // Read directly here rather than going through ProductUnitRepository
+  // -- that repository already depends on this one (for findByBarcode,
+  // see ProductUnitRepository.generateUnits), so taking a dependency
+  // the other way round too would make the two repositories construct
+  // each other. A plain two-field-equality read of one collection
+  // doesn't need a whole repository class to do it safely.
+  CollectionReference<Map<String, dynamic>> get _units => _db.collection('product_units');
+
   /// A live list of this shop's products, newest first, that updates
   /// automatically whenever a product is added/changed elsewhere —
   /// that's what makes this a Stream instead of a one-time fetch.
@@ -112,6 +120,18 @@ class ProductRepository {
     return _products.doc(id).delete();
   }
 
+  /// The one and only place that writes `Product.tracksUniqueUnits` --
+  /// called from the Barcode Labels screen whenever the owner actually
+  /// flips the "Unique code per sticker" toggle for a product, so it's
+  /// remembered the next time that screen opens. A plain single-field
+  /// `.update()`, not a full `updateProduct()` round-trip, so this
+  /// can't accidentally touch (or regenerate a barcode for) anything
+  /// else on the product -- see Product.toMap()'s own comment for why
+  /// this field is deliberately excluded from that normal save path.
+  Future<void> setTracksUniqueUnits(String id, bool value) {
+    return _products.doc(id).update({'tracksUniqueUnits': value});
+  }
+
   /// Looks up a single product by its barcode, scoped to one shop --
   /// this is what lets Add Product (and, later, Sales/POS) tell "this
   /// barcode is already one of our products" apart from "never seen
@@ -150,8 +170,24 @@ class ProductRepository {
     final random = Random();
     for (var attempt = 0; attempt < 5; attempt++) {
       final code = List.generate(10, (_) => random.nextInt(10)).join();
-      final existing = await findByBarcode(code, shopId: shopId);
-      if (existing == null) return code;
+      final existingProduct = await findByBarcode(code, shopId: shopId);
+      if (existingProduct != null) continue;
+      // Also checked against ProductUnit codes (see ProductUnit) --
+      // this plain all-digit barcode scheme and the OLD plain
+      // all-digit unit-code scheme shared one numeric namespace, so a
+      // brand-new product could never be assigned a number an
+      // already-printed phone sticker was using. Unit codes generated
+      // today (see ProductUnitRepository.generateUnits) look like
+      // "SP-SAM-00000001" -- letters and dashes, not plain digits --
+      // so a fresh code from here structurally can't collide with one
+      // of those; this check is kept only for products added while
+      // any unit codes from before that change are still around.
+      final existingUnit = await _units
+          .where('shopId', isEqualTo: shopId)
+          .where('code', isEqualTo: code)
+          .limit(1)
+          .get();
+      if (existingUnit.docs.isEmpty) return code;
     }
     // Essentially unreachable (a 1-in-10-billion clash, five times in a
     // row) -- falls back to the old scheme, which stays guaranteed

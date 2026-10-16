@@ -108,107 +108,25 @@ class _ServiceJobDetailSheetState extends State<_ServiceJobDetailSheet> {
   /// Small confirm-or-edit-the-price dialog shown only on the Ready ->
   /// Picked Up transition. Pre-filled with the job's current price.
   /// Returns the confirmed amount, or null if the person cancelled.
+  ///
+  /// The TextEditingController lives inside `_PickupPriceDialog` (a
+  /// real StatefulWidget) instead of a local variable here. Disposing
+  /// it manually right after `showDialog` returned races the dialog's
+  /// own closing animation -- the TextField can still be mid-rebuild
+  /// against an already-disposed controller, which throws
+  /// "TextEditingController used after being disposed" and then a
+  /// "_dependents.isEmpty" crash (seen on the barcode-labels quantity
+  /// dialog, which copied this exact pattern). Letting State.dispose()
+  /// free it, at the point the dialog element is actually removed,
+  /// fixes that properly.
   Future<double?> _confirmPickupPrice() async {
-    final p = AppPalette.of(context);
     final job = widget.job;
-    final controller = TextEditingController(
-      text: job.price == job.price.roundToDouble() ? job.price.toStringAsFixed(0) : job.price.toString(),
-    );
-    String? error;
-
-    final result = await showDialog<double>(
+    return showDialog<double>(
       context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              backgroundColor: p.card,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Confirm final price', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, color: p.textPrimary)),
-                    const SizedBox(height: 6),
-                    Text(
-                      "Before handing the device back, confirm or change the price.",
-                      style: TextStyle(fontSize: 13, color: p.textSecondary, height: 1.4),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: p.background,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: error != null ? AppColors.danger : p.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Text('₹', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.textSecondary)),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: TextField(
-                              controller: controller,
-                              autofocus: true,
-                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                              style: TextStyle(fontSize: 15, color: p.textPrimary),
-                              decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 12)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (error != null) ...[
-                      const SizedBox(height: 6),
-                      Text(error!, style: const TextStyle(fontSize: 12, color: AppColors.danger)),
-                    ],
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () => Navigator.of(dialogContext).pop(),
-                            child: Container(
-                              height: 46,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: p.border)),
-                              child: Text('Cancel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.textPrimary)),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              final value = double.tryParse(controller.text.replaceAll(',', '').trim());
-                              if (value == null || value < 0) {
-                                setDialogState(() => error = 'Enter a valid price');
-                                return;
-                              }
-                              Navigator.of(dialogContext).pop(value);
-                            },
-                            child: Container(
-                              height: 46,
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(10)),
-                              child: const Text('Confirm Pickup', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (dialogContext) => _PickupPriceDialog(
+        initialPrice: job.price == job.price.roundToDouble() ? job.price.toStringAsFixed(0) : job.price.toString(),
+      ),
     );
-    controller.dispose();
-    return result;
   }
 
   Future<void> _edit() async {
@@ -349,6 +267,126 @@ class _DetailRow extends StatelessWidget {
           SizedBox(width: 80, child: Text(label, style: TextStyle(fontSize: 13, color: palette.textSecondary))),
           Expanded(child: Text(value, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: palette.textPrimary))),
         ],
+      ),
+    );
+  }
+}
+
+/// Dialog content for `_confirmPickupPrice`, split out into its own
+/// StatefulWidget so its TextEditingController is created in
+/// `initState` and freed in `dispose` -- tied to the dialog element's
+/// real lifecycle instead of a manually-disposed local variable (see
+/// the note on `_confirmPickupPrice` above).
+class _PickupPriceDialog extends StatefulWidget {
+  final String initialPrice;
+
+  const _PickupPriceDialog({required this.initialPrice});
+
+  @override
+  State<_PickupPriceDialog> createState() => _PickupPriceDialogState();
+}
+
+class _PickupPriceDialogState extends State<_PickupPriceDialog> {
+  late final TextEditingController _controller;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialPrice);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = double.tryParse(_controller.text.replaceAll(',', '').trim());
+    if (value == null || value < 0) {
+      setState(() => _error = 'Enter a valid price');
+      return;
+    }
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Dialog(
+      backgroundColor: p.card,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Confirm final price', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.w700, color: p.textPrimary)),
+            const SizedBox(height: 6),
+            Text(
+              "Before handing the device back, confirm or change the price.",
+              style: TextStyle(fontSize: 13, color: p.textSecondary, height: 1.4),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                color: p.background,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _error != null ? AppColors.danger : p.border),
+              ),
+              child: Row(
+                children: [
+                  Text('₹', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: p.textSecondary)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: TextStyle(fontSize: 15, color: p.textPrimary),
+                      decoration: const InputDecoration(border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              Text(_error!, style: const TextStyle(fontSize: 12, color: AppColors.danger)),
+            ],
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      height: 46,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: p.card, borderRadius: BorderRadius.circular(10), border: Border.all(color: p.border)),
+                      child: Text('Cancel', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.textPrimary)),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _submit,
+                    child: Container(
+                      height: 46,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(10)),
+                      child: const Text('Confirm Pickup', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

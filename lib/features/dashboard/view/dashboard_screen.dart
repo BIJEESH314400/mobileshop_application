@@ -8,6 +8,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/shimmer_loading.dart';
 import '../../chat/bloc/unread_summary_bloc.dart';
 import '../../chat/bloc/unread_summary_event.dart';
 import '../../chat/bloc/unread_summary_state.dart';
@@ -540,6 +541,12 @@ class _StatGrid extends StatelessWidget {
                 final lowStockCount = productsState.products.where((p) => p.stockQty <= lowStockThreshold).length;
                 final lowStockOk = lowStockCount == 0;
 
+                if ((state.isLoading && state.sales.isEmpty) ||
+                    (serviceState.isLoading && serviceState.jobs.isEmpty) ||
+                    (productsState.isLoading && productsState.products.isEmpty)) {
+                  return const ShimmerStatGrid();
+                }
+
                 return GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -639,7 +646,21 @@ class _StatCard extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: labelColor)),
-          Text(value, style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: valueColor)),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: valueColor),
+            ),
+          ),
           Row(
             children: [
               if (showTrendIcon) ...[

@@ -26,6 +26,18 @@ class Product extends Equatable {
   /// barcode yet", same convention as an empty `sku`.
   final String barcode;
 
+  // Whether this product's print runs should default to "Unique code
+  // per sticker" being ON (see BarcodeLabelsScreen). Read-only from
+  // this model's own toMap() -- see the comment there for why -- and
+  // only ever written by ProductRepository.setTracksUniqueUnits,
+  // called from the Barcode Labels screen itself when the owner
+  // actually changes the toggle. Defaults to true (both here and when
+  // reading a document that doesn't have this field yet) because
+  // every product this screen can print for benefits from per-unit
+  // tracking unless the owner opts a specific one out, not the other
+  // way around.
+  final bool tracksUniqueUnits;
+
   const Product({
     required this.id,
     required this.name,
@@ -39,6 +51,7 @@ class Product extends Equatable {
     required this.shopId,
     this.createdAt,
     this.barcode = '',
+    this.tracksUniqueUnits = true,
   });
 
   /// Builds a Product from a Firestore document. `id` comes from
@@ -62,6 +75,12 @@ class Product extends Equatable {
       // don't have it -- '' is the correct read for those, same
       // "missing means not set yet" convention as every other field here.
       barcode: map['barcode'] as String? ?? '',
+      // Missing (every product saved before this field existed, and
+      // every product never touched on Barcode Labels since) reads as
+      // true -- see this field's own doc comment above for why "not
+      // set yet" means "on" here, unlike barcode/sku's "not set yet"
+      // meaning blank.
+      tracksUniqueUnits: map['tracksUniqueUnits'] as bool? ?? true,
     );
   }
 
@@ -83,6 +102,14 @@ class Product extends Equatable {
       'shopId': shopId,
       'createdAt': FieldValue.serverTimestamp(),
       'barcode': barcode,
+      // tracksUniqueUnits is deliberately NOT written here. Add
+      // Product's form knows nothing about this field and always
+      // builds a fresh Product with it left at its default (true) --
+      // if toMap() included it, every ordinary product edit (fixing a
+      // price, restocking) would silently stomp the owner's actual
+      // saved preference back to true. Only
+      // ProductRepository.setTracksUniqueUnits writes this field, and
+      // only the Barcode Labels screen calls it.
     };
   }
 
@@ -100,5 +127,6 @@ class Product extends Equatable {
         shopId,
         createdAt,
         barcode,
+        tracksUniqueUnits,
       ];
 }

@@ -6,6 +6,7 @@ import '../../features/customers/view/add_customer_screen.dart';
 import '../../features/customers/view/customers_screen.dart';
 import '../../features/dashboard/view/dashboard_screen.dart';
 import '../../features/products/view/add_product_screen.dart';
+import '../../features/products/view/manage_brands_screen.dart';
 import '../../features/products/view/products_screen.dart';
 import '../../features/product_requests/view/product_requests_screen.dart';
 import '../../features/profile/view/add_employee_screen.dart';
@@ -35,6 +36,7 @@ class AppRoutes {
   static const profile = '/profile';
   static const staffManagement = '/staff-management';
   static const addEmployee = '/add-employee';
+  static const manageCategories = '/manage-categories';
   static const productRequests = '/product-requests';
 
   static Map<String, WidgetBuilder> routes = {
@@ -53,6 +55,7 @@ class AppRoutes {
     profile: (_) => const ProfileScreen(),
     staffManagement: (_) => const StaffManagementScreen(),
     addEmployee: (_) => const AddEmployeeScreen(),
+    manageCategories: (_) => const ManageBrandsScreen(),
     productRequests: (_) => const ProductRequestsScreen(),
   };
 }

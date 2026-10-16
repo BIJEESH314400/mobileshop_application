@@ -6,7 +6,6 @@ import '../../../core/models/product.dart';
 import '../../../core/repositories/product_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
-import '../../../core/widgets/confirm_delete_dialog.dart';
 import '../../../core/widgets/lookup_picker_dialog.dart';
 import '../bloc/add_product_bloc.dart';
 import '../bloc/add_product_event.dart';
@@ -134,17 +133,33 @@ class _AddProductViewState extends State<_AddProductView> {
       collection: 'categories',
       selected: _category,
     );
-    if (picked != null) setState(() => _category = picked);
+    if (picked == null) return;
+    setState(() {
+      // Switching category can make the brand already picked belong to
+      // a completely different line of products (Mobile -> Perfume,
+      // say) -- clearing it avoids silently keeping a brand that has
+      // nothing to do with the newly chosen category.
+      if (picked != _category) _brand = null;
+      _category = picked;
+    });
   }
 
   Future<void> _pickBrand() async {
+    final category = _category;
+    if (category == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('Select a category first')));
+      return;
+    }
     final picked = await LookupPickerDialog.show(
       context,
       title: 'Select Brand',
-      subtitle: 'Choose or create product brand',
+      subtitle: 'Choose or create brand for $category',
       itemLabel: 'brand',
       collection: 'brands',
       selected: _brand,
+      filterCategory: category,
     );
     if (picked != null) setState(() => _brand = picked);
   }
@@ -229,19 +244,6 @@ class _AddProductViewState extends State<_AddProductView> {
       ..showSnackBar(SnackBar(content: Text('$label — coming soon')));
   }
 
-  Future<void> _confirmDelete(BuildContext context) async {
-    final confirmed = await ConfirmDeleteDialog.show(
-      context,
-      title: 'Delete this product permanently?',
-      message: "This can't be undone. It will be removed from your product list for good.",
-      confirmLabel: 'Yes, Delete Product',
-      cancelLabel: 'Keep Product',
-    );
-    if (confirmed && context.mounted) {
-      context.read<AddProductBloc>().add(AddProductDeleted(productId: widget.product!.id));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
@@ -298,19 +300,6 @@ class _AddProductViewState extends State<_AddProductView> {
                           ],
                         ),
                       ),
-                      if (_isEditing) ...[
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: (state.isSubmitting || state.isDeleting) ? null : () => _confirmDelete(context),
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(color: AppColors.danger.withOpacity(0.1), shape: BoxShape.circle),
-                            child: const Icon(Icons.delete_outline_rounded, size: 19, color: AppColors.danger),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),
@@ -456,7 +445,7 @@ class _AddProductViewState extends State<_AddProductView> {
                         ],
                       ),
                       const SizedBox(height: 14),
-                      _FieldLabel('SKU / IMEI', palette: p),
+                      _FieldLabel('SKU / Code', palette: p),
                       const SizedBox(height: 7),
                       _FieldBox(
                         palette: p,
@@ -469,18 +458,20 @@ class _AddProductViewState extends State<_AddProductView> {
                                 decoration: const InputDecoration(
                                   border: InputBorder.none,
                                   isDense: true,
-                                  hintText: 'Scan or enter IMEI number',
+                                  hintText: 'Scan or enter a code',
                                   hintStyle: TextStyle(fontSize: 14, color: Color(0xFF9C9CA6)),
                                 ),
                               ),
                             ),
-                            // Still a placeholder -- this is the phone's
-                            // IMEI (a free-text identifier), kept deliberately
-                            // simple per the "no per-unit IMEI tracking yet"
-                            // decision. The working scanner lives on the new
-                            // Barcode field below instead.
+                            // Still a placeholder -- a free-text
+                            // identifier (IMEI for phones, or any other
+                            // code for other kinds of products), kept
+                            // deliberately simple per the "no per-unit
+                            // IMEI tracking yet" decision. The working
+                            // scanner lives on the new Barcode field
+                            // below instead.
                             GestureDetector(
-                              onTap: () => _comingSoon(context, 'IMEI scan'),
+                              onTap: () => _comingSoon(context, 'SKU/code scan'),
                               child: Container(
                                 width: 30,
                                 height: 30,

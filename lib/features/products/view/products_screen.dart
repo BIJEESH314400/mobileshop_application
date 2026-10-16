@@ -3,10 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/models/product.dart';
+import '../../../core/repositories/product_repository.dart';
 import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/confirm_delete_dialog.dart';
+import '../../../core/widgets/shimmer_loading.dart';
 import 'add_product_screen.dart';
 import 'barcode_labels_screen.dart';
 import '../bloc/products_bloc.dart';
@@ -243,7 +246,7 @@ class _ProductsViewState extends State<_ProductsView> {
   Widget _buildBody(BuildContext context, AppPalette p, ProductsState state,
       List<Product> products) {
     if (state.isLoading && state.products.isEmpty) {
-      return const Center(child: CircularProgressIndicator(strokeWidth: 2.4));
+      return const ShimmerListSkeleton(padding: EdgeInsets.fromLTRB(20, 6, 20, 100));
     }
 
     if (state.errorMessage != null && state.products.isEmpty) {
@@ -396,11 +399,17 @@ class _ProductCard extends StatelessWidget {
         .where((part) => part.isNotEmpty)
         .join(' · ');
 
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => AddProductScreen(product: product)),
-      ),
-      child: Container(
+    return Dismissible(
+      key: ValueKey(product.id),
+      direction: DismissDirection.horizontal,
+      background: const _SwipeDeleteBackground(alignment: Alignment.centerLeft),
+      secondaryBackground: const _SwipeDeleteBackground(alignment: Alignment.centerRight),
+      confirmDismiss: (_) => _confirmAndDeleteProduct(context, product),
+      child: GestureDetector(
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => AddProductScreen(product: product)),
+        ),
+        child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: palette.card,
@@ -479,6 +488,67 @@ class _ProductCard extends StatelessWidget {
           ],
         ),
       ),
+      ),
+    );
+  }
+}
+
+
+/// Shows the shared delete-confirmation sheet, then deletes the product
+/// directly from Firestore (bypassing AddProductBloc, which the Edit
+/// Product screen's own delete icon used to drive). The actual delete is
+/// awaited *inside* confirmDismiss -- not deferred to onDismissed -- so
+/// the Firestore-stream-backed list has already dropped the item by the
+/// time Dismissible's exit animation finishes; doing it the other way
+/// around throws "A dismissed Dismissible widget is still part of the
+/// tree" once the stream rebuilds mid-animation.
+Future<bool> _confirmAndDeleteProduct(BuildContext context, Product product) async {
+  final confirmed = await ConfirmDeleteDialog.show(
+    context,
+    title: 'Delete this product permanently?',
+    message: "This can't be undone. It will be removed from your product list for good.",
+    confirmLabel: 'Yes, Delete Product',
+    cancelLabel: 'Keep Product',
+  );
+  if (!confirmed) return false;
+
+  try {
+    await ProductRepository().deleteProduct(product.id);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('Could not delete: $e')));
+    }
+    return false;
+  }
+
+  if (context.mounted) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Product deleted')));
+  }
+  return true;
+}
+
+/// Red "delete" reveal shown behind a product row while it's being
+/// swiped, for both swipe directions (alignment picks which side the
+/// icon sits on, matching the edge the user swiped from).
+class _SwipeDeleteBackground extends StatelessWidget {
+  final Alignment alignment;
+
+  const _SwipeDeleteBackground({required this.alignment});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      alignment: alignment,
+      decoration: BoxDecoration(
+        color: AppColors.danger,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: const Icon(Icons.delete_outline_rounded, color: Colors.white, size: 26),
     );
   }
 }

@@ -97,6 +97,23 @@ class _IdleLockGateState extends State<IdleLockGate> with WidgetsBindingObserver
     if (user == null) {
       _hasPinForCurrentUser = false;
       _locked = false;
+      // Bug fix (2026-10-16): this used to reset `_locked` but not
+      // `_unlockScreenShowing` -- so the one path that removes a
+      // pushed PinUnlockScreen WITHOUT popping it (PinUnlockScreen.
+      // _forceFullLogin's `pushNamedAndRemoveUntil`, behind "Forgot
+      // PIN? Log in with password instead") left `_unlockScreenShowing`
+      // stuck true forever, since _showUnlockScreen only ever clears it
+      // inside a `.then()` on the push's Future -- which never
+      // completes for a route removed this way, not just popped.
+      // Every sign-out (Forgot PIN, or a normal logout) already lands
+      // here, so it's the one place that reliably sees every case,
+      // without PinUnlockScreen needing to know who pushed it or reach
+      // into IdleLockGate's internals itself. Left stuck, this
+      // silently disabled _onResumed()'s relock for the rest of that
+      // app process's life -- reopening the app just went straight
+      // back to whatever screen was open, no popup, no PIN, until a
+      // full app restart happened to recreate this State from scratch.
+      _unlockScreenShowing = false;
       _idleTimer?.cancel();
       return;
     }

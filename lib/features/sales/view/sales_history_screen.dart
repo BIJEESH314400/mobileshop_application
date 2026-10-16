@@ -12,6 +12,7 @@ import '../../../core/repositories/sale_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/widgets/shimmer_loading.dart';
 import 'customer_picker_sheet.dart';
 import 'date_range_filter_sheet.dart';
 import '../bloc/sales_history_bloc.dart';
@@ -243,7 +244,7 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
 
   Widget _buildBody(BuildContext context, AppPalette p, SalesHistoryState state) {
     if (state.isLoading && state.sales.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const ShimmerListSkeleton(padding: EdgeInsets.fromLTRB(20, 16, 20, 100));
     }
     if (state.errorMessage != null && state.sales.isEmpty) {
       return Center(child: Text(state.errorMessage!, style: TextStyle(color: p.textSecondary)));

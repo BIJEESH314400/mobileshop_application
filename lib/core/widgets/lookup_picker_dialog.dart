@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../repositories/lookup_repository.dart';
+import '../routes/app_routes.dart';
+import '../routes/root_navigator_key.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 
@@ -22,6 +24,13 @@ class LookupPickerDialog extends StatefulWidget {
   final String collection;
   final String? selected;
 
+  /// When set, both the shown list and any name added from here are
+  /// scoped to this category (see [LookupRepository.watchNames] /
+  /// [LookupRepository.addName] for exactly what that filtering does).
+  /// Left null for pickers that don't have a category to scope by
+  /// (the Category picker itself, for one).
+  final String? filterCategory;
+
   const LookupPickerDialog({
     super.key,
     required this.title,
@@ -29,6 +38,7 @@ class LookupPickerDialog extends StatefulWidget {
     required this.itemLabel,
     required this.collection,
     this.selected,
+    this.filterCategory,
   });
 
   /// Shows the picker as a bottom sheet and returns the name the
@@ -41,6 +51,7 @@ class LookupPickerDialog extends StatefulWidget {
     required String itemLabel,
     required String collection,
     String? selected,
+    String? filterCategory,
   }) {
     return showModalBottomSheet<String>(
       context: context,
@@ -57,6 +68,7 @@ class LookupPickerDialog extends StatefulWidget {
         itemLabel: itemLabel,
         collection: collection,
         selected: selected,
+        filterCategory: filterCategory,
       ),
     );
   }
@@ -68,40 +80,30 @@ class LookupPickerDialog extends StatefulWidget {
 class _LookupPickerDialogState extends State<LookupPickerDialog> {
   final _repository = LookupRepository();
   final _searchController = TextEditingController();
-  final _newNameController = TextEditingController();
   String _query = '';
-  bool _adding = false;
 
   @override
   void dispose() {
     _searchController.dispose();
-    _newNameController.dispose();
     super.dispose();
   }
 
-  Future<void> _addNew() async {
-    final name = _newNameController.text.trim();
-    if (name.isEmpty) return;
-
-    setState(() => _adding = true);
-    try {
-      await _repository.addName(widget.collection, name);
-      // Popping with the typed name (rather than waiting for the stream
-      // to push it back) means the sheet closes immediately instead of
-      // the person watching their own entry pop into the list first.
-      if (mounted) {
-        Navigator.of(context).pop(name);
-      }
-    } catch (_) {
-      // Without this, a failed write (e.g. Firestore rules blocking it)
-      // left the spinner running forever with no explanation.
-      if (mounted) {
-        setState(() => _adding = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save — check your connection and try again.')),
-        );
-      }
-    }
+  /// Closes this picker and opens the owner-only Manage Categories &
+  /// Brands screen -- the one place a new category/brand can actually
+  /// be created now (see that screen and `firestore.rules`). Reached
+  /// by everyone, owner or employee: there's no separate check here
+  /// for whether to *show* this row (that's what caused the jank/blink
+  /// bug -- the row used to wait on an async owner lookup before
+  /// appearing, shifting the whole sheet's layout once it resolved).
+  /// An employee who taps it just gets bounced straight back out by
+  /// `OwnerOnlyGate` on that screen, same as reaching any other
+  /// owner-only route directly -- the real gate lives there and in
+  /// the Firestore rules, not in this picker.
+  void _goToManageCategories() {
+    Navigator.of(context).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      rootNavigatorKey.currentState?.pushNamed(AppRoutes.manageCategories);
+    });
   }
 
   @override
@@ -169,7 +171,7 @@ class _LookupPickerDialogState extends State<LookupPickerDialog> {
                   const SizedBox(height: 16),
                   Flexible(
                     child: StreamBuilder<List<String>>(
-                      stream: _repository.watchNames(widget.collection),
+                      stream: _repository.watchNames(widget.collection, category: widget.filterCategory),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
                           return const Padding(
@@ -251,7 +253,21 @@ class _LookupPickerDialogState extends State<LookupPickerDialog> {
                                         return Padding(
                                           padding: const EdgeInsets.only(bottom: 4),
                                           child: GestureDetector(
-                                            onTap: () => Navigator.of(context).pop(name),
+                                            onTap: () {
+                                              // Fire-and-forget: this list only ever shows a
+                                              // name that's untagged or already matches
+                                              // filterCategory, so this can only fill in a
+                                              // blank, never overwrite an existing tag -- and
+                                              // the picker shouldn't wait on it to close.
+                                              if (widget.filterCategory != null) {
+                                                _repository.tagExistingIfUntagged(
+                                                  widget.collection,
+                                                  name,
+                                                  widget.filterCategory!,
+                                                );
+                                              }
+                                              Navigator.of(context).pop(name);
+                                            },
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                               decoration: BoxDecoration(
@@ -284,56 +300,35 @@ class _LookupPickerDialogState extends State<LookupPickerDialog> {
                       },
                     ),
                   ),
+                  // No inline "add it here" box any more -- creating a
+                  // brand-new category/brand is now only done from the
+                  // owner-only Manage Categories & Brands screen (see
+                  // `_goToManageCategories` above for why this row itself
+                  // isn't conditionally hidden).
                   const SizedBox(height: 14),
-                  Text(
-                    "CAN'T FIND A ${widget.itemLabel.toUpperCase()}?",
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: p.textSecondary, letterSpacing: 0.4),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _newNameController,
-                          style: TextStyle(fontSize: 14, color: p.textPrimary),
-                          decoration: InputDecoration(
-                            isDense: true,
-                            hintText: 'Add custom ${widget.itemLabel}...',
-                            hintStyle: TextStyle(fontSize: 13, color: p.textSecondary),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: p.border)),
-                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: p.border)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
-                          ),
-                          onSubmitted: (_) => _adding ? null : _addNew(),
-                        ),
+                  GestureDetector(
+                    onTap: _goToManageCategories,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                      decoration: BoxDecoration(
+                        color: p.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: p.border),
                       ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: _adding ? null : _addNew,
-                        child: Container(
-                          height: 46,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(12)),
-                          child: Center(
-                            child: _adding
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(Colors.white)),
-                                  )
-                                : const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                                      SizedBox(width: 4),
-                                      Text('Add', style: TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w700)),
-                                    ],
-                                  ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.category_outlined, size: 17, color: p.textSecondary),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              "Can't find a ${widget.itemLabel}? Manage Categories & Brands",
+                              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: p.textPrimary),
+                            ),
                           ),
-                        ),
+                          Icon(Icons.chevron_right_rounded, size: 18, color: p.textSecondary),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),

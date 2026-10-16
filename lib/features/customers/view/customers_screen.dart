@@ -9,6 +9,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/widgets/shimmer_loading.dart';
 import '../bloc/customers_bloc.dart';
 import '../bloc/customers_event.dart';
 import '../bloc/customers_state.dart';
@@ -164,7 +165,7 @@ class _CustomersViewState extends State<_CustomersView> {
               child: BlocBuilder<CustomersBloc, CustomersState>(
                 builder: (context, state) {
                   if (state.isLoading && state.customers.isEmpty) {
-                    return const Center(child: CircularProgressIndicator(strokeWidth: 2.4));
+                    return const ShimmerListSkeleton(padding: EdgeInsets.fromLTRB(20, 10, 20, 100));
                   }
                   if (state.errorMessage != null && state.customers.isEmpty) {
                     return Center(child: Text(state.errorMessage!, style: TextStyle(color: p.textSecondary)));

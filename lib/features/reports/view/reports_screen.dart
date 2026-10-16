@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../../../core/models/sale.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/shimmer_loading.dart';
 import '../bloc/reports_bloc.dart';
 import '../bloc/reports_event.dart';
 import '../bloc/reports_state.dart';
@@ -120,7 +121,26 @@ class _ReportsViewState extends State<_ReportsView> {
               child: BlocBuilder<ReportsBloc, ReportsState>(
                 builder: (context, state) {
                   if (state.isLoading && state.sales.isEmpty) {
-                    return const Center(child: CircularProgressIndicator());
+                    return ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                      children: [
+                        const ShimmerStatRow(),
+                        const SizedBox(height: 16),
+                        ShimmerWrap(
+                          child: ShimmerBox(
+                            width: double.infinity,
+                            height: 160,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const ShimmerListRow(),
+                        const SizedBox(height: 10),
+                        const ShimmerListRow(),
+                        const SizedBox(height: 10),
+                        const ShimmerListRow(),
+                      ],
+                    );
                   }
                   if (state.errorMessage != null && state.sales.isEmpty) {
                     return Center(child: Text(state.errorMessage!, style: TextStyle(color: p.textSecondary)));
@@ -289,11 +309,22 @@ class _StatTile extends StatelessWidget {
             style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: emphasize ? Colors.white70 : palette.textSecondary),
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: emphasize ? Colors.white : palette.textPrimary),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              value,
+              key: ValueKey(value),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: emphasize ? Colors.white : palette.textPrimary),
+            ),
           ),
         ],
       ),

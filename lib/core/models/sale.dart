@@ -11,19 +11,59 @@ class SaleItem extends Equatable {
   final double price;
   final int qty;
 
+  // The product's barcode at sale time -- same snapshot reasoning as
+  // name/price above, plus it means a receipt/Sales History row can
+  // show or search by barcode without a second Firestore read back to
+  // the (possibly since-edited-or-deleted) product. Empty for any sale
+  // completed before this field existed, or for a product that never
+  // had a barcode -- same empty-string-as-absent convention used
+  // everywhere else in this app.
+  final String barcode;
+
+  // Which ProductUnit.id's this line retired, if any -- e.g. 2 of
+  // this line's 5 qty were specific individually-tracked units (see
+  // ProductUnit's own doc comment), scanned by their own unique codes
+  // rather than picked generically. Empty for a normal sale -- the
+  // vast majority -- where nothing here needed per-unit tracking.
+  // SaleRepository.completeSale marks every id here 'sold' in the same
+  // transaction that writes this Sale, so a unit's code is retired for
+  // good the moment the sale that used it actually goes through.
+  final List<String> unitIds;
+
+  // The confirmed barcode for every single unit in this line, in the
+  // order they were verified -- one entry per unit sold (length ==
+  // qty once a sale actually goes through, since Complete Sale is
+  // blocked until every slot in the cart is verified). For a unit
+  // backed by a real ProductUnit (see unitIds above), the matching
+  // entry here is that unit's own code; for a plain product with no
+  // per-unit tracking, it's the product's shared barcode, confirmed
+  // once per physical item scanned/typed at sale time. Empty for any
+  // sale completed before this per-unit confirmation flow existed --
+  // `barcode` above (the product-level snapshot) is all those older
+  // sales have.
+  final List<String> unitBarcodes;
+
   const SaleItem({
     required this.productId,
     required this.name,
     required this.price,
     required this.qty,
+    this.barcode = '',
+    this.unitIds = const [],
+    this.unitBarcodes = const [],
   });
 
   factory SaleItem.fromMap(Map<String, dynamic> map) {
+    final rawUnitIds = map['unitIds'] as List<dynamic>? ?? const [];
+    final rawUnitBarcodes = map['unitBarcodes'] as List<dynamic>? ?? const [];
     return SaleItem(
       productId: map['productId'] as String? ?? '',
       name: map['name'] as String? ?? '',
       price: (map['price'] as num?)?.toDouble() ?? 0,
       qty: (map['qty'] as num?)?.toInt() ?? 0,
+      barcode: map['barcode'] as String? ?? '',
+      unitIds: rawUnitIds.map((id) => id as String).toList(),
+      unitBarcodes: rawUnitBarcodes.map((code) => code as String).toList(),
     );
   }
 
@@ -33,13 +73,16 @@ class SaleItem extends Equatable {
       'name': name,
       'price': price,
       'qty': qty,
+      'barcode': barcode,
+      'unitIds': unitIds,
+      'unitBarcodes': unitBarcodes,
     };
   }
 
   double get lineTotal => price * qty;
 
   @override
-  List<Object?> get props => [productId, name, price, qty];
+  List<Object?> get props => [productId, name, price, qty, barcode, unitIds, unitBarcodes];
 }
 
 /// One row in the `sales` Firestore collection. Writing this document
