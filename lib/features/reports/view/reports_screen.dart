@@ -3,7 +3,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 
+import '../../../core/constants/shop_constants.dart';
 import '../../../core/models/sale.dart';
+import '../../../core/models/shop_details.dart';
+import '../../../core/models/tax_invoice_settings.dart';
+import '../../../core/repositories/shop_details_repository.dart';
+import '../../../core/repositories/tax_invoice_settings_repository.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/shimmer_loading.dart';
@@ -69,8 +75,30 @@ class _ReportsViewState extends State<_ReportsView> {
     final state = context.read<ReportsBloc>().state;
     final filtered = _filtered(state.sales);
     final periodLabel = _PeriodPills._labels[_period] ?? '';
-    final bytes = await buildReportPdfBytes(periodLabel: periodLabel, sales: filtered);
+    final (shop, tax) = await _loadReportBranding();
+    final bytes = await buildReportPdfBytes(periodLabel: periodLabel, sales: filtered, shop: shop, tax: tax);
     await Printing.sharePdf(bytes: bytes, filename: 'report-${periodLabel.toLowerCase().replaceAll(' ', '-')}.pdf');
+  }
+
+  /// Shop Details / Tax & Invoice Settings for the report masthead --
+  /// best-effort, fails open to `null` (the old hardcoded "4B
+  /// Mobiles", no GSTIN) on any error, same fail-open convention as
+  /// every other non-security read in this app. Exporting a report
+  /// should never crash or be blocked over a branding line.
+  Future<(ShopDetails?, TaxInvoiceSettings?)> _loadReportBranding() async {
+    ShopDetails? shop;
+    TaxInvoiceSettings? tax;
+    try {
+      shop = await ShopDetailsRepository().getShopDetails(currentShopId);
+    } catch (e, st) {
+      AppLogger.error('ReceiptBranding.shop', e, st);
+    }
+    try {
+      tax = await TaxInvoiceSettingsRepository().getTaxInvoiceSettings(currentShopId);
+    } catch (e, st) {
+      AppLogger.error('ReceiptBranding.tax', e, st);
+    }
+    return (shop, tax);
   }
 
   @override

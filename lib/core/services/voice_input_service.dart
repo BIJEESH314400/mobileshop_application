@@ -1,3 +1,4 @@
+import 'package:permission_handler/permission_handler.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 import '../utils/app_logger.dart';
@@ -13,35 +14,57 @@ import '../utils/app_logger.dart';
 /// `Speech` framework), not a cloud service of ours -- consistent with
 /// every other "avoid a paid/billing dependency" choice already made
 /// in this app (Firebase Storage, Google Maps, true background push).
+enum VoiceMicPermission { granted, denied, permanentlyDenied }
+
 class VoiceInputService {
   VoiceInputService._();
   static final VoiceInputService instance = VoiceInputService._();
 
   final stt.SpeechToText _speech = stt.SpeechToText();
-  bool _initialized = false;
-  bool _initFailed = false;
 
   bool get isListening => _speech.isListening;
 
-  /// `initialize()` is itself what triggers the OS's microphone/speech
-  /// permission prompt the first time it's called -- no separate
-  /// permission package needed. Cached after the first attempt (success
-  /// OR failure) so a denied/unsupported device doesn't re-prompt on
-  /// every single tap of the mic.
+  /// Explicitly requests the microphone (and, on iOS, Speech
+  /// Recognition) permission before listening -- matching a reference
+  /// implementation confirmed working reliably, rather than relying
+  /// only on [startListening]'s own implicit prompt inside
+  /// `initialize()`. Call this first so a permanently denied
+  /// permission can be told apart from "not asked yet" and the caller
+  /// can offer to open the OS settings screen. `Permission.speech` is
+  /// a no-op on Android (always granted) and maps to the iOS Speech
+  /// framework permission there.
+  Future<VoiceMicPermission> ensureMicrophonePermission() async {
+    final micStatus = await Permission.microphone.status;
+    final speechStatus = await Permission.speech.status;
+    if (micStatus.isPermanentlyDenied || speechStatus.isPermanentlyDenied) {
+      return VoiceMicPermission.permanentlyDenied;
+    }
+    final results = await [Permission.microphone, Permission.speech].request();
+    if (results[Permission.microphone]?.isGranted ?? false) {
+      return VoiceMicPermission.granted;
+    }
+    final anyPermanentlyDenied = results.values.any((s) => s.isPermanentlyDenied);
+    return anyPermanentlyDenied ? VoiceMicPermission.permanentlyDenied : VoiceMicPermission.denied;
+  }
+
+  /// Re-initializes the recognizer fresh on every call -- deliberately
+  /// NOT cached/short-circuited after a failure. An early transient
+  /// failure (a slow permission dialog, a recognizer service that
+  /// hadn't finished binding yet, etc.) used to permanently "stick"
+  /// this service as broken for the rest of the app session; always
+  /// retrying matches the reference implementation and costs very
+  /// little since `initialize()` itself is cheap once permission is
+  /// already granted.
   Future<bool> _ensureInitialized() async {
-    if (_initialized) return true;
-    if (_initFailed) return false;
     try {
-      _initialized = await _speech.initialize(
+      return await _speech.initialize(
         onError: (e) => AppLogger.error('VoiceInputService.initialize.onError', e.errorMsg, null),
         onStatus: (_) {},
       );
     } catch (e, st) {
       AppLogger.error('VoiceInputService.initialize', e, st);
-      _initialized = false;
+      return false;
     }
-    _initFailed = !_initialized;
-    return _initialized;
   }
 
   /// Starts listening. [onResult] fires repeatedly as recognition

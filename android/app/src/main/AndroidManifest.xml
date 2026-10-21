@@ -16,6 +16,16 @@
          feeds it to the platform's own on-device speech recognizer
          (no account, API key, or network service of ours involved). -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- For the Bluetooth thermal receipt printer (Profile -> Printer
+         Settings, owner-only): connecting to an already-paired printer
+         over classic Bluetooth to print a Sales receipt. BLUETOOTH and
+         BLUETOOTH_ADMIN cover Android 11 and below; BLUETOOTH_CONNECT
+         is the Android 12+ (API 31+) runtime-requested replacement;
+         requested at runtime via permission_handler before any
+         Bluetooth call, same pattern already used for the microphone. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <application
         android:label="4B Mobiles"
         android:name="${applicationName}"

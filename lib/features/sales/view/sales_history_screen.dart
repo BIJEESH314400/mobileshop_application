@@ -7,17 +7,24 @@ import 'package:printing/printing.dart';
 
 import '../../../core/constants/shop_constants.dart';
 import '../../../core/models/sale.dart';
+import '../../../core/models/shop_details.dart';
+import '../../../core/models/tax_invoice_settings.dart';
 import '../../../core/repositories/customer_repository.dart';
 import '../../../core/repositories/sale_repository.dart';
+import '../../../core/repositories/shop_details_repository.dart';
+import '../../../core/repositories/tax_invoice_settings_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/services/bluetooth_printer_service.dart';
+import '../../../core/services/printer_prefs.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import 'customer_picker_sheet.dart';
 import 'date_range_filter_sheet.dart';
 import '../bloc/sales_history_bloc.dart';
 import '../bloc/sales_history_event.dart';
 import '../bloc/sales_history_state.dart';
+import '../utils/receipt_escpos.dart';
 import '../utils/sales_pdf.dart';
 
 final _priceFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹', decimalDigits: 0);
@@ -70,9 +77,75 @@ void _comingSoon(BuildContext context, String label) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label — coming soon')));
 }
 
+/// Shop Details / Tax & Invoice Settings for the receipt/report
+/// masthead -- best-effort, fails open to `null` (the old hardcoded
+/// "4B Mobiles", no GSTIN/invoice-number/footer) on any error, same
+/// as every other non-security read in this app (e.g.
+/// `SalesBloc`'s own tax-rate read). A printed receipt should never
+/// crash or be blocked over a branding line.
+Future<(ShopDetails?, TaxInvoiceSettings?)> _loadReceiptBranding() async {
+  ShopDetails? shop;
+  TaxInvoiceSettings? tax;
+  try {
+    shop = await ShopDetailsRepository().getShopDetails(currentShopId);
+  } catch (e, st) {
+    AppLogger.error('ReceiptBranding.shop', e, st);
+  }
+  try {
+    tax = await TaxInvoiceSettingsRepository().getTaxInvoiceSettings(currentShopId);
+  } catch (e, st) {
+    AppLogger.error('ReceiptBranding.tax', e, st);
+  }
+  return (shop, tax);
+}
+
 Future<void> _shareReceiptPdf(BuildContext context, Sale sale) async {
-  final bytes = await buildReceiptPdfBytes(sale);
+  final (shop, tax) = await _loadReceiptBranding();
+  final bytes = await buildReceiptPdfBytes(sale, shop: shop, tax: tax);
   await Printing.sharePdf(bytes: bytes, filename: 'receipt-${sale.id}.pdf');
+}
+
+/// Prints [sale] to whichever Bluetooth thermal printer this phone has
+/// selected (Profile -> Printer Settings, owner-only). Deliberately
+/// separate from the PDF share button above -- most cheap Bluetooth
+/// receipt printers (Visiontek included) don't register as an Android
+/// system print service, so they're never reachable through the PDF
+/// share sheet's own "Print" option; this talks to the printer
+/// directly over a raw Bluetooth socket instead.
+Future<void> _printReceiptBluetooth(BuildContext context, Sale sale) async {
+  final address = await PrinterPrefs.getSelectedPrinterAddress();
+  if (address == null) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('No printer selected -- set one in Profile → Printer Settings')));
+    return;
+  }
+  final granted = await BluetoothPrinterService.instance.ensurePermission();
+  if (!granted) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Bluetooth permission is needed to print')));
+    return;
+  }
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(const SnackBar(content: Text('Printing…')));
+  final (shop, tax) = await _loadReceiptBranding();
+  final bytes = buildReceiptEscPosBytes(sale, shop: shop, tax: tax);
+  final outcome = await BluetoothPrinterService.instance.printBytes(address: address, bytes: bytes);
+  if (!context.mounted) return;
+  final message = switch (outcome) {
+    PrintOutcome.success => 'Receipt sent to printer',
+    PrintOutcome.permissionDenied => 'Bluetooth permission is needed to print',
+    PrintOutcome.connectFailed => "Couldn't connect — check the printer is on and in range",
+    _ => "Couldn't print — try again",
+  };
+  ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(SnackBar(content: Text(message)));
 }
 
 /// Revenue trend over the trailing 7 days vs. the 7 days before that --
@@ -234,10 +307,13 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
   }
 
   Future<void> _exportSalesPdf(BuildContext context, List<Sale> sales) async {
+    final (shop, tax) = await _loadReceiptBranding();
     final bytes = await buildSalesListPdfBytes(
       sales,
       dateRange: _dateRange,
       searchQuery: _searchCtrl.text,
+      shop: shop,
+      tax: tax,
     );
     await Printing.sharePdf(bytes: bytes, filename: 'sales-history.pdf');
   }
@@ -1034,6 +1110,13 @@ void _showReceipt(BuildContext context, Sale sale, AppPalette palette) {
                 children: [
                   Expanded(
                     child: Text('Receipt', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: palette.textPrimary)),
+                  ),
+                  GestureDetector(
+                    onTap: () => _printReceiptBluetooth(context, sale),
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 16),
+                      child: Icon(Icons.print_outlined, size: 19, color: palette.textSecondary),
+                    ),
                   ),
                   GestureDetector(
                     onTap: () => _shareReceiptPdf(context, sale),

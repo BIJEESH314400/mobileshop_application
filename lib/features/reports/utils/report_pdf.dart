@@ -5,6 +5,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../../core/models/sale.dart';
+import '../../../core/models/shop_details.dart';
+import '../../../core/models/tax_invoice_settings.dart';
+import '../../../core/utils/receipt_branding.dart';
 
 /// PDF builder for the Reports screen -- same stat-row / top-products /
 /// payment-breakdown math as reports_screen.dart's `_StatRow`,
@@ -29,6 +32,8 @@ class _ReportProductAgg {
 Future<Uint8List> buildReportPdfBytes({
   required String periodLabel,
   required List<Sale> sales,
+  ShopDetails? shop,
+  TaxInvoiceSettings? tax,
 }) async {
   final doc = pw.Document();
 
@@ -77,14 +82,12 @@ Future<Uint8List> buildReportPdfBytes({
       margin: const pw.EdgeInsets.all(32),
       header: (context) {
         if (context.pageNumber > 1) {
-          return pw.Text('4B Mobiles - Reports (continued)', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600));
+          return pw.Text('${shopDisplayName(shop)} - Reports (continued)', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600));
         }
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text('4B Mobiles', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 2),
-            pw.Text('Reports & Analytics', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+            buildPdfShopHeader(shop: shop, tax: tax, subtitle: 'Reports & Analytics'),
             pw.SizedBox(height: 2),
             pw.Text(periodLabel, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
             pw.SizedBox(height: 12),

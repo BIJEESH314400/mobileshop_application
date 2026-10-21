@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../services/translation_service.dart';
 import '../services/voice_input_service.dart';
@@ -8,6 +9,13 @@ import '../theme/app_colors.dart';
 import '../theme/app_palette.dart';
 
 enum _PendingAction { none, pause, done }
+
+/// Which way a recording should be translated, picked above the box
+/// before tapping the mic. `plainEnglish` is the original, untouched
+/// behavior -- recognized English speech goes in as-is, no
+/// translation. The other two both translate on Done (see
+/// `_finishAndClose`), one in each direction.
+enum TranslateMode { plainEnglish, englishToMalayalam, malayalamToEnglish }
 
 /// Which language a voice recording (or a tagged run of already-
 /// recognized text) is in. See [LanguageTaggedTextController].
@@ -143,14 +151,14 @@ class LanguageTaggedTextController extends TextEditingController {
 ///
 /// A small EN/ML toggle next to the mic picks the spoken language.
 /// For English, recognized speech is appended as-is -- unchanged from
-/// before Malayalam support existed. For Malayalam, on Done the
-/// recognized Malayalam words are translated to English
-/// (`TranslationService`) and **both** -- the original Malayalam and
-/// its English translation -- are appended together, each colored
-/// differently (`LanguageTaggedTextController`) so they stay easy to
-/// tell apart in the same box. If translation fails (no signal, the
-/// free translate endpoint being flaky), the Malayalam text alone is
-/// kept and a snackbar explains why -- never a lost recording.
+/// before Malayalam support existed. For Malayalam, the card shows
+/// the Malayalam words live while you're speaking, same as English
+/// does; on Done they're translated to English (`TranslationService`)
+/// and **only the English translation** is appended to the field --
+/// matching a reference voice-translator app's own proven behavior.
+/// If translation fails (no signal, the free translate endpoint being
+/// flaky), the Malayalam text is kept instead and a snackbar explains
+/// why -- never a lost recording.
 ///
 /// Every call site owns its own instance, but they all share one
 /// `VoiceInputService` underneath -- see that class's doc comment for
@@ -199,7 +207,7 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
   bool _busy = false;
   String? _statusOverride;
 
-  VoiceLanguage _language = VoiceLanguage.english;
+  TranslateMode _mode = TranslateMode.plainEnglish;
 
   String _committedSegments = '';
   String _liveText = '';
@@ -242,31 +250,26 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
 
   Future<void> _beginRecording({required bool isResume}) async {
     if (_busy) return;
-    if (_language == VoiceLanguage.malayalam) {
-      setState(() => _busy = true);
-      final available = await VoiceInputService.instance.isLocaleSupported('ml');
-      if (!mounted) return;
-      if (!available) {
-        // Say exactly what the phone's recognizer DOES offer, not just
-        // that Malayalam is missing -- tells apart "add Malayalam in
-        // your keyboard/voice settings" from "no recognizer at all" at
-        // a glance, without needing to go spelunking for logs.
-        final ids = await VoiceInputService.instance.availableLocaleIds();
-        if (!mounted) return;
-        final detail = ids.isEmpty
-            ? 'no voice languages found on this phone at all'
-            : 'this phone currently offers: ${ids.take(10).join(', ')}${ids.length > 10 ? ', …' : ''}';
-        setState(() => _busy = false);
+    setState(() => _busy = true);
+    // Explicit permission check before every recording, matching a
+    // reference implementation confirmed working reliably -- and no
+    // locale pre-check before Malayalam recordings any more: Android's
+    // recognizer can often still attempt a language (via its online
+    // path) that isn't in the "installed offline languages" list a
+    // pre-check would see, so asking it to just try is more reliable
+    // than guessing from that list first.
+    final permission = await VoiceInputService.instance.ensureMicrophonePermission();
+    if (!mounted) return;
+    if (permission != VoiceMicPermission.granted) {
+      setState(() => _busy = false);
+      if (permission == VoiceMicPermission.permanentlyDenied) {
+        _showPermissionSettingsDialog();
+      } else {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(
-            duration: const Duration(seconds: 6),
-            content: Text("Malayalam dictation isn't set up on this phone -- $detail. Add it in your keyboard/voice typing language settings."),
-          ));
-        return;
+          ..showSnackBar(const SnackBar(content: Text('Microphone permission is needed to record a voice note')));
       }
-    } else {
-      setState(() => _busy = true);
+      return;
     }
     if (!isResume) {
       _committedSegments = '';
@@ -276,7 +279,7 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
     _sessionId++;
     final mySession = _sessionId;
     final started = await VoiceInputService.instance.startListening(
-      localeId: _language == VoiceLanguage.malayalam ? 'ml-IN' : null,
+      localeId: _mode == TranslateMode.malayalamToEnglish ? 'ml-IN' : null,
       onResult: (text, isFinal) {
         if (!mounted || mySession != _sessionId) return;
         setState(() => _liveText = text);
@@ -360,12 +363,49 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
 
   Future<void> _onResumePressed() => _beginRecording(isResume: true);
 
+  /// Wipes the field instantly -- the small delete icon next to the
+  /// mic, separate from the recording card's own Trash button (that
+  /// one only discards an in-progress recording; this clears whatever
+  /// is already saved in the field, typed or from earlier voice
+  /// notes). No confirmation prompt -- it's a plain text field, same
+  /// as clearing it by hand with backspace, just immediate.
+  void _clearAllText() {
+    widget.controller.clear();
+  }
+
+  void _showPermissionSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Microphone permission needed'),
+        content: const Text(
+          "Voice notes need microphone access, and it's currently turned off for this app. Turn it on from the app's settings to use voice notes.",
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              openAppSettings();
+            },
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _finishAndClose({required bool commit}) async {
     if (!mounted) return;
     if (commit) {
       final full = _fullLiveText;
       if (full.isNotEmpty) {
-        if (_language == VoiceLanguage.malayalam) {
+        // Matches the reference app's own flow: the spoken words were
+        // already visible live in the card while recording -- on
+        // Done, only the translated result goes into the field
+        // (appended after whatever was already there, same as plain
+        // dictation), not both the original and the translation.
+        if (_mode == TranslateMode.malayalamToEnglish) {
           setState(() {
             _busy = true;
             _statusOverride = 'TRANSLATING...';
@@ -373,12 +413,27 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
           final english = await TranslationService.instance.malayalamToEnglish(full);
           if (!mounted) return;
           if (english != null && english.trim().isNotEmpty) {
-            widget.controller.appendTranslatedVoiceNote(malayalamText: full, englishText: english.trim());
+            widget.controller.appendPlain(english.trim());
           } else {
             widget.controller.appendPlain(full);
             ScaffoldMessenger.of(context)
               ..hideCurrentSnackBar()
               ..showSnackBar(const SnackBar(content: Text("Couldn't translate right now -- kept the Malayalam text")));
+          }
+        } else if (_mode == TranslateMode.englishToMalayalam) {
+          setState(() {
+            _busy = true;
+            _statusOverride = 'TRANSLATING...';
+          });
+          final malayalam = await TranslationService.instance.englishToMalayalam(full);
+          if (!mounted) return;
+          if (malayalam != null && malayalam.trim().isNotEmpty) {
+            widget.controller.appendPlain(malayalam.trim());
+          } else {
+            widget.controller.appendPlain(full);
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(const SnackBar(content: Text("Couldn't translate right now -- kept the English text")));
           }
         } else {
           widget.controller.appendPlain(full);
@@ -418,44 +473,66 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
   }
 
   Widget _buildIdleField(AppPalette p) {
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: TextField(
-            controller: widget.controller,
-            minLines: widget.minLines,
-            maxLines: widget.maxLines,
-            style: widget.textStyle,
-            decoration: InputDecoration(
-              border: InputBorder.none,
-              isDense: true,
-              hintText: widget.hintText,
-              hintStyle: widget.hintStyle,
+        _TranslateModeSelector(
+          mode: _mode,
+          onChanged: _busy ? null : (m) => setState(() => _mode = m),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextField(
+                controller: widget.controller,
+                minLines: widget.minLines,
+                maxLines: widget.maxLines,
+                style: widget.textStyle,
+                decoration: InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  hintText: widget.hintText,
+                  hintStyle: widget.hintStyle,
+                ),
+              ),
             ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        _LanguageToggle(
-          language: _language,
-          onChanged: _busy ? null : (lang) => setState(() => _language = lang),
-        ),
-        const SizedBox(width: 6),
-        GestureDetector(
-          onTap: _busy ? null : () => _beginRecording(isResume: false),
-          child: Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: p.border)),
-            alignment: Alignment.center,
-            child: _busy
-                ? SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 1.8, valueColor: AlwaysStoppedAnimation(p.textSecondary)),
-                  )
-                : Icon(Icons.mic_none_rounded, size: 16, color: p.textSecondary),
-          ),
+            const SizedBox(width: 8),
+            AnimatedBuilder(
+              animation: widget.controller,
+              builder: (context, _) {
+                final hasText = widget.controller.text.isNotEmpty;
+                return GestureDetector(
+                  onTap: (!hasText || _busy) ? null : _clearAllText,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: p.border)),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.delete_outline_rounded, size: 15, color: hasText ? AppColors.danger : p.border),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: _busy ? null : () => _beginRecording(isResume: false),
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.accent),
+                alignment: Alignment.center,
+                child: _busy
+                    ? const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 1.8, valueColor: AlwaysStoppedAnimation(Colors.white)),
+                      )
+                    : const Icon(Icons.mic_rounded, size: 16, color: Colors.white),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -463,8 +540,19 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
 
   Widget _buildRecordingCard(AppPalette p) {
     final transcript = _fullLiveText;
-    final pillText = _statusOverride ??
-        (_paused ? 'PAUSED' : (_language == VoiceLanguage.malayalam ? 'LISTENING... (ML)' : 'LISTENING...'));
+    String listeningLabel;
+    switch (_mode) {
+      case TranslateMode.englishToMalayalam:
+        listeningLabel = 'LISTENING... (EN→ML)';
+        break;
+      case TranslateMode.malayalamToEnglish:
+        listeningLabel = 'LISTENING... (ML→EN)';
+        break;
+      case TranslateMode.plainEnglish:
+        listeningLabel = 'LISTENING...';
+        break;
+    }
+    final pillText = _statusOverride ?? (_paused ? 'PAUSED' : listeningLabel);
     final dotColor = _statusOverride != null ? AppColors.accent : (_paused ? AppColors.warning : AppColors.danger);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -530,38 +618,54 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
   Widget _dot(Color color) => Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: color));
 }
 
-/// Small EN / ML pill pair next to the mic icon, picking which
-/// language the next recording listens for. Each letter is tinted
-/// with the same color its recognized text will get in the field once
-/// it's a Malayalam note (`AppColors.voiceEnglish`/`voiceMalayalam`),
-/// so the toggle doubles as a little color legend.
-class _LanguageToggle extends StatelessWidget {
-  final VoiceLanguage language;
-  final ValueChanged<VoiceLanguage>? onChanged;
-  const _LanguageToggle({required this.language, required this.onChanged});
+/// Sits above the box in its idle state, picking how the next
+/// recording should be handled: plain English dictation (no
+/// translation -- the original, default behavior), English spoken but
+/// written as Malayalam, or Malayalam spoken but written as English.
+/// Each option is tinted with the color its result would get
+/// (`AppColors.voiceEnglish`/`voiceMalayalam`, or the app's accent
+/// color for plain dictation), so the row doubles as a quick legend.
+class _TranslateModeSelector extends StatelessWidget {
+  final TranslateMode mode;
+  final ValueChanged<TranslateMode>? onChanged;
+  const _TranslateModeSelector({required this.mode, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
     return Container(
       padding: const EdgeInsets.all(2),
-      decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), border: Border.all(color: p.border)),
+      decoration: BoxDecoration(
+        color: p.background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: p.border),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _chip(context, 'EN', VoiceLanguage.english, AppColors.voiceEnglish, p),
-          _chip(context, 'ML', VoiceLanguage.malayalam, AppColors.voiceMalayalam, p),
+          _segment(context, 'English', TranslateMode.plainEnglish, AppColors.accent, p),
+          _divider(p),
+          _segment(context, 'EN → ML', TranslateMode.englishToMalayalam, AppColors.voiceEnglish, p),
+          _divider(p),
+          _segment(context, 'ML → EN', TranslateMode.malayalamToEnglish, AppColors.voiceMalayalam, p),
         ],
       ),
     );
   }
 
-  Widget _chip(BuildContext context, String label, VoiceLanguage value, Color activeColor, AppPalette p) {
-    final selected = language == value;
+  Widget _divider(AppPalette p) => Container(
+        width: 1,
+        height: 14,
+        margin: const EdgeInsets.symmetric(horizontal: 2),
+        color: p.border,
+      );
+
+  Widget _segment(BuildContext context, String label, TranslateMode value, Color activeColor, AppPalette p) {
+    final selected = mode == value;
     return GestureDetector(
       onTap: onChanged == null ? null : () => onChanged!(value),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
           color: selected ? activeColor.withOpacity(0.12) : Colors.transparent,
           borderRadius: BorderRadius.circular(6),

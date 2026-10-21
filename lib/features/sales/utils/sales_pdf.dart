@@ -6,6 +6,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../../../core/models/sale.dart';
+import '../../../core/models/shop_details.dart';
+import '../../../core/models/tax_invoice_settings.dart';
+import '../../../core/utils/receipt_branding.dart';
 
 /// PDF builders for Sales History -- a single sale's receipt, and a
 /// report of a whole (already filtered) list of sales. Kept separate
@@ -20,8 +23,10 @@ final _pdfDate = DateFormat('d MMM yyyy');
 /// Receipt bottom sheet (sales_history_screen.dart's `_showReceipt`):
 /// date, sold-by, customer link, itemized lines, subtotal/discount/
 /// tax/total, payment method.
-Future<Uint8List> buildReceiptPdfBytes(Sale sale) async {
+Future<Uint8List> buildReceiptPdfBytes(Sale sale, {ShopDetails? shop, TaxInvoiceSettings? tax}) async {
   final doc = pw.Document();
+  final invoiceNumber = buildInvoiceNumber(sale.id, tax);
+  final footerNote = buildPdfFooterNote(tax);
 
   doc.addPage(
     pw.Page(
@@ -31,14 +36,14 @@ Future<Uint8List> buildReceiptPdfBytes(Sale sale) async {
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text('4B Mobiles', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 2),
-            pw.Text('Sales Receipt', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+            buildPdfShopHeader(shop: shop, tax: tax, subtitle: 'Sales Receipt'),
             pw.SizedBox(height: 14),
             pw.Text(
               sale.createdAt == null ? 'Just now' : _pdfDateTime.format(sale.createdAt!),
               style: const pw.TextStyle(fontSize: 10),
             ),
+            if (invoiceNumber != null)
+              pw.Text('Invoice No: $invoiceNumber', style: const pw.TextStyle(fontSize: 10)),
             if (sale.soldByName.isNotEmpty)
               pw.Text(
                 'Sold by ${sale.soldByName}${sale.soldByRole == 'owner' ? ' (Owner)' : ' (Staff)'}',
@@ -79,6 +84,7 @@ Future<Uint8List> buildReceiptPdfBytes(Sale sale) async {
             _pdfTotalRow('Total', sale.total, emphasize: true),
             pw.SizedBox(height: 12),
             pw.Text('Paid via ${sale.paymentMethod.toUpperCase()}', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+            if (footerNote != null) footerNote,
           ],
         );
       },
@@ -97,6 +103,8 @@ Future<Uint8List> buildSalesListPdfBytes(
   List<Sale> sales, {
   DateTimeRange? dateRange,
   String? searchQuery,
+  ShopDetails? shop,
+  TaxInvoiceSettings? tax,
 }) async {
   final doc = pw.Document();
   final revenue = sales.fold(0.0, (sum, s) => sum + s.total);
@@ -115,14 +123,12 @@ Future<Uint8List> buildSalesListPdfBytes(
       margin: const pw.EdgeInsets.all(32),
       header: (context) {
         if (context.pageNumber > 1) {
-          return pw.Text('4B Mobiles - Sales Report (continued)', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600));
+          return pw.Text('${shopDisplayName(shop)} - Sales Report (continued)', style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600));
         }
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            pw.Text('4B Mobiles', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-            pw.SizedBox(height: 2),
-            pw.Text('Sales Report', style: const pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
+            buildPdfShopHeader(shop: shop, tax: tax, subtitle: 'Sales Report'),
             if (filterLines.isNotEmpty) ...[
               pw.SizedBox(height: 2),
               pw.Text(filterLines.join('  ·  '), style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),

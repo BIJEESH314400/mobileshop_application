@@ -11,6 +11,7 @@ import '../../../core/repositories/pin_repository.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../pin/view/set_pin_screen.dart';
 import 'set_recovery_email_sheet.dart';
+import 'printer_settings_screen.dart';
 import '../../chat/view/chat_list_screen.dart';
 import '../../chat/view/conversation_screen.dart';
 import '../../theme/bloc/theme_bloc.dart';
@@ -324,6 +325,16 @@ class _ProfileViewState extends State<_ProfileView> {
                             icon: Icons.receipt_long_outlined,
                             label: 'Tax & Invoice Settings',
                             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TaxInvoiceSettingsScreen())),
+                          ),
+                        // Only the owner picks which Bluetooth thermal
+                        // printer this phone prints receipts to -- see
+                        // PrinterSettingsScreen's own doc comment for
+                        // why this is a per-device, owner-only setting.
+                        if (user == null || user.isOwner)
+                          _MenuRowData(
+                            icon: Icons.print_outlined,
+                            label: 'Printer Settings',
+                            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PrinterSettingsScreen())),
                           ),
                       ],
                     ),
