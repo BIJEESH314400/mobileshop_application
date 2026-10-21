@@ -19,6 +19,11 @@ import '../../theme/bloc/theme_state.dart';
 import '../bloc/current_user_bloc.dart';
 import '../bloc/current_user_event.dart';
 import '../bloc/current_user_state.dart';
+import 'edit_profile_screen.dart';
+import 'shop_details_screen.dart';
+import 'payment_settings_screen.dart';
+import 'tax_invoice_settings_screen.dart';
+import 'help_center_screen.dart';
 
 /// Profile — matches the CellPoint design canvas (account card, three
 /// grouped settings sections, Log Out).
@@ -69,6 +74,20 @@ class _ProfileViewState extends State<_ProfileView> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text('$feature — coming soon')));
+  }
+
+  /// Opens Edit Profile and, if it actually saved something, re-asks
+  /// CurrentUserBloc for the signed-in user so the new name/phone show
+  /// immediately -- same "reset and let the next build re-fetch" idea
+  /// _openSetPin already uses below, just via the bloc instead of a
+  /// bare Future.
+  Future<void> _openEditProfile(AppUser user) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => EditProfileScreen(user: user)),
+    );
+    if (saved == true && mounted) {
+      context.read<CurrentUserBloc>().add(const CurrentUserRequested());
+    }
   }
 
   void _openSetPin() {
@@ -205,7 +224,9 @@ class _ProfileViewState extends State<_ProfileView> {
                   children: [
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => _comingSoon('Edit Profile'),
+                      onTap: () {
+                        if (user != null) _openEditProfile(user);
+                      },
                       child: Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -249,8 +270,15 @@ class _ProfileViewState extends State<_ProfileView> {
                       palette: p,
                       title: 'ACCOUNT',
                       rows: [
-                        _MenuRowData(icon: Icons.person_outline, label: 'Edit Profile', onTap: () => _comingSoon('Edit Profile')),
-                        _MenuRowData(icon: Icons.storefront_outlined, label: 'Shop Details', onTap: () => _comingSoon('Shop Details')),
+                        _MenuRowData(icon: Icons.person_outline, label: 'Edit Profile', onTap: () { if (user != null) _openEditProfile(user); }),
+                        // Only the owner manages shop-wide business info -- an
+                        // employee account has no reason to see this row.
+                        if (user == null || user.isOwner)
+                          _MenuRowData(
+                            icon: Icons.storefront_outlined,
+                            label: 'Shop Details',
+                            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ShopDetailsScreen())),
+                          ),
                         // Only the owner manages staff — an employee
                         // account has no reason to see this row.
                         if (user == null || user.isOwner)
@@ -280,8 +308,23 @@ class _ProfileViewState extends State<_ProfileView> {
                             label: 'Manage Categories & Brands',
                             onTap: () => Navigator.of(context).pushNamed(AppRoutes.manageCategories),
                           ),
-                        _MenuRowData(icon: Icons.credit_card_outlined, label: 'Payment Settings', onTap: () => _comingSoon('Payment Settings')),
-                        _MenuRowData(icon: Icons.receipt_long_outlined, label: 'Tax & Invoice Settings', onTap: () => _comingSoon('Tax & Invoice Settings')),
+                        // Only the owner manages payment/bank details -- an
+                        // employee account has no reason to see this row.
+                        if (user == null || user.isOwner)
+                          _MenuRowData(
+                            icon: Icons.credit_card_outlined,
+                            label: 'Payment Settings',
+                            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PaymentSettingsScreen())),
+                          ),
+                        // Only the owner sets the GST rate checkout
+                        // actually uses -- an employee account has no
+                        // reason to see this row.
+                        if (user == null || user.isOwner)
+                          _MenuRowData(
+                            icon: Icons.receipt_long_outlined,
+                            label: 'Tax & Invoice Settings',
+                            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TaxInvoiceSettingsScreen())),
+                          ),
                       ],
                     ),
                     const SizedBox(height: 20),
@@ -392,7 +435,13 @@ class _ProfileViewState extends State<_ProfileView> {
                               ),
                               _MenuRow(
                                 palette: p,
-                                data: _MenuRowData(icon: Icons.help_outline_rounded, label: 'Help Center', onTap: () => _comingSoon('Help Center')),
+                                data: _MenuRowData(
+                                  icon: Icons.help_outline_rounded,
+                                  label: 'Help Center',
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => HelpCenterScreen(currentUser: user)),
+                                  ),
+                                ),
                                 showBottomBorder: false,
                               ),
                             ],

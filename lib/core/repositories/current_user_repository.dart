@@ -46,6 +46,24 @@ class CurrentUserRepository {
     final email = _auth.currentUser?.email ?? user.email ?? '';
 
     final employeeDoc = await _db.collection('employees').doc(user.uid).get();
+
+    // A self-editable override for displayName/phone, written by
+    // Profile's own Edit Profile screen (see ProfileRepository) --
+    // kept in its own collection rather than inside `employees/{uid}`
+    // (owner-only writes there) or anywhere owner-specific, since
+    // there's no document at all for the owner otherwise.
+    String? overrideName;
+    String phone = '';
+    try {
+      final profileDoc = await _db.collection('userProfiles').doc(user.uid).get();
+      final profileData = profileDoc.data();
+      final rawName = profileData?['name'] as String?;
+      if (rawName != null && rawName.trim().isNotEmpty) overrideName = rawName.trim();
+      phone = (profileData?['phone'] as String?) ?? '';
+    } catch (e, st) {
+      AppLogger.error('CurrentUserRepository.loadCurrentUser (userProfiles)', e, st);
+    }
+
     final AppUser result;
     if (employeeDoc.exists) {
       // Read the real stored username field instead of deriving it
@@ -56,15 +74,15 @@ class CurrentUserRepository {
       // username regardless of what the account's email currently is.
       final data = employeeDoc.data();
       final username = data?['username'] as String? ?? email.split('@').first;
-      final name = data?['name'] as String? ?? username;
-      result = AppUser(uid: user.uid, username: username, displayName: name, role: AppRole.employee, email: email);
+      final name = overrideName ?? (data?['name'] as String? ?? username);
+      result = AppUser(uid: user.uid, username: username, displayName: name, role: AppRole.employee, email: email, phone: phone);
     } else {
       // Not in `employees` -> the owner. Only one owner account exists
       // today and it always logs in as `owner` — hardcoded rather than
       // derived from the email for the same reason as above: once the
       // owner's email is a real personal address, its local part has
       // no relation to their actual login username anymore.
-      result = AppUser(uid: user.uid, username: 'owner', displayName: 'Owner', role: AppRole.owner, email: email);
+      result = AppUser(uid: user.uid, username: 'owner', displayName: overrideName ?? 'Owner', role: AppRole.owner, email: email, phone: phone);
     }
 
     // Self-heal `usernames/<username>` if Firebase Auth's real email

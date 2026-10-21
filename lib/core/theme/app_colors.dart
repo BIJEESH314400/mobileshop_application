@@ -32,6 +32,13 @@ class AppColors {
   static const successBg = Color(0xFFDCFCE7);
   static const dangerBg = Color(0xFFFEE2E2);
 
+  // Added for the Malayalam-voice-to-English note feature (2026-10-19)
+  // -- when a voice note is spoken in Malayalam, the original words
+  // and their English translation both go into the same field, each
+  // colored so they stay easy to tell apart at a glance.
+  static const voiceMalayalam = Color(0xFF8B1E1E); // dark red
+  static const voiceEnglish = Color(0xFF1B3A6B); // dark blue
+
   // Added for Add Customer's section badges/icons (2026-09-25) --
   // "READY" (blue) and "B2B VERIFIED" (purple) needed colors outside
   // the success/warning/danger set above, kept fixed in both themes

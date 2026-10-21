@@ -417,7 +417,7 @@ class _SalesViewState extends State<_SalesView> {
                               ),
                               const SizedBox(height: 10),
                               _SummaryRow(
-                                label: 'Tax (GST ${(SalesState.taxRate * 100).toStringAsFixed(0)}%)',
+                                label: 'Tax (GST ${state.taxRatePercent.toStringAsFixed(state.taxRatePercent == state.taxRatePercent.roundToDouble() ? 0 : 1)}%)',
                                 value: _priceFormat.format(state.tax),
                                 palette: p,
                               ),

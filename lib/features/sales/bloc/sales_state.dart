@@ -104,9 +104,6 @@ class CartItem extends Equatable {
 }
 
 class SalesState extends Equatable {
-  /// Fixed for now — see SaleDiscountChanged for why discount isn't.
-  static const double taxRate = 0.18;
-
   final bool isLoadingProducts;
   final List<Product> availableProducts;
   final List<CartItem> cartItems;
@@ -122,6 +119,16 @@ class SalesState extends Equatable {
   /// stamped onto the Sale on submit. Null only very briefly while that
   /// lookup is still in flight, or if it failed outright.
   final AppUser? currentUser;
+
+  /// GST % actually applied below, in [tax] -- loaded once when the
+  /// screen opens from TaxInvoiceSettingsRepository (same shot as
+  /// [currentUser], see SalesBloc._onSubscriptionRequested) and
+  /// defaults to 18 (TaxInvoiceSettings' own default) until that load
+  /// finishes or if it fails outright, matching this app's long-
+  /// standing 18% GST behaviour from before Tax & Invoice Settings
+  /// existed. Fixed per-sale, not live -- see SaleDiscountChanged for
+  /// why discount isn't either.
+  final double taxRatePercent;
 
   /// Live customer directory for the picker sheet (see
   /// SalesCustomersSubscriptionRequested) and whichever one is picked
@@ -141,6 +148,7 @@ class SalesState extends Equatable {
     this.completedTotal,
     this.errorMessage,
     this.currentUser,
+    this.taxRatePercent = 18.0,
     this.availableCustomers = const [],
     this.selectedCustomer,
   });
@@ -156,7 +164,7 @@ class SalesState extends Equatable {
     return entered > subtotal ? subtotal : entered;
   }
 
-  double get tax => (subtotal - discount) * taxRate;
+  double get tax => (subtotal - discount) * (taxRatePercent / 100.0);
 
   double get total => subtotal - discount + tax;
 
@@ -180,6 +188,7 @@ class SalesState extends Equatable {
     String? errorMessage,
     bool clearError = false,
     AppUser? currentUser,
+    double? taxRatePercent,
     List<Customer>? availableCustomers,
     Customer? selectedCustomer,
     bool clearCustomer = false,
@@ -195,6 +204,7 @@ class SalesState extends Equatable {
       completedTotal: completedTotal ?? this.completedTotal,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       currentUser: currentUser ?? this.currentUser,
+      taxRatePercent: taxRatePercent ?? this.taxRatePercent,
       availableCustomers: availableCustomers ?? this.availableCustomers,
       selectedCustomer: clearCustomer ? null : (selectedCustomer ?? this.selectedCustomer),
     );
@@ -212,6 +222,7 @@ class SalesState extends Equatable {
         completedTotal,
         errorMessage,
         currentUser,
+        taxRatePercent,
         availableCustomers,
         selectedCustomer,
       ];

@@ -8,6 +8,7 @@ import '../../../core/repositories/current_user_repository.dart';
 import '../../../core/repositories/customer_repository.dart';
 import '../../../core/repositories/product_repository.dart';
 import '../../../core/repositories/sale_repository.dart';
+import '../../../core/repositories/tax_invoice_settings_repository.dart';
 import 'sales_event.dart';
 import 'sales_state.dart';
 
@@ -16,16 +17,19 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
   final SaleRepository _saleRepository;
   final CurrentUserRepository _currentUserRepository;
   final CustomerRepository _customerRepository;
+  final TaxInvoiceSettingsRepository _taxInvoiceSettingsRepository;
 
   SalesBloc({
     ProductRepository? productRepository,
     SaleRepository? saleRepository,
     CurrentUserRepository? currentUserRepository,
     CustomerRepository? customerRepository,
+    TaxInvoiceSettingsRepository? taxInvoiceSettingsRepository,
   })  : _productRepository = productRepository ?? ProductRepository(),
         _saleRepository = saleRepository ?? SaleRepository(),
         _currentUserRepository = currentUserRepository ?? CurrentUserRepository(),
         _customerRepository = customerRepository ?? CustomerRepository(),
+        _taxInvoiceSettingsRepository = taxInvoiceSettingsRepository ?? TaxInvoiceSettingsRepository(),
         super(const SalesState()) {
     on<SalesSubscriptionRequested>(_onSubscriptionRequested);
     on<SalesCustomersSubscriptionRequested>(_onCustomersSubscriptionRequested);
@@ -85,6 +89,19 @@ class SalesBloc extends Bloc<SalesEvent, SalesState> {
       emit(state.copyWith(currentUser: currentUser));
     } catch (_) {
       // Leave currentUser null -- see the comment above.
+    }
+
+    // One-shot, same reasoning as currentUser just above -- the GST
+    // rate doesn't change mid-sale either. A failed/missing read
+    // leaves state.taxRatePercent at its 18% default (see SalesState's
+    // own field doc comment), so checkout keeps working exactly as it
+    // always did if this shop never opened Tax & Invoice Settings, or
+    // if this one read hiccups.
+    try {
+      final taxSettings = await _taxInvoiceSettingsRepository.getTaxInvoiceSettings(currentShopId);
+      emit(state.copyWith(taxRatePercent: taxSettings.taxRatePercent));
+    } catch (_) {
+      // Leave taxRatePercent at its default -- see the comment above.
     }
 
     // Same live-stream pattern as ProductsBloc — the "Add Product"

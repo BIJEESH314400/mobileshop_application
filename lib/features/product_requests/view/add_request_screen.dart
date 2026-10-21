@@ -8,6 +8,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../sales/view/customer_picker_sheet.dart';
+import '../../../core/widgets/voice_note_field.dart';
 
 /// Add Request -- a full page, same "back-arrow header, labeled field
 /// boxes, bottom Save button" shape as every other Add/Edit screen in
@@ -50,7 +51,7 @@ class AddRequestScreen extends StatefulWidget {
 class _AddRequestScreenState extends State<AddRequestScreen> {
   final _itemCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController(text: '1');
-  final _noteCtrl = TextEditingController();
+  final _noteCtrl = LanguageTaggedTextController();
 
   Customer? _customer;
   bool _saving = false;
@@ -241,25 +242,13 @@ class _AddRequestScreenState extends State<AddRequestScreen> {
                     ],
                   ),
                   const SizedBox(height: 7),
-                  Container(
+                  VoiceNoteFieldBody(
+                    controller: _noteCtrl,
                     constraints: const BoxConstraints(minHeight: 80),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: p.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: p.border),
-                    ),
-                    child: TextField(
-                      controller: _noteCtrl,
-                      maxLines: null,
-                      style: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        hintText: 'e.g. will check back in 3 days',
-                        hintStyle: TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF9C9CA6)),
-                      ),
-                    ),
+                    textStyle: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
+                    hintText: 'e.g. will check back in 3 days',
+                    hintStyle: const TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF9C9CA6)),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 14),

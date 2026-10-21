@@ -13,7 +13,7 @@ import '../../../core/models/sale.dart';
 /// in step with that screen deliberately: whatever the owner sees on
 /// screen for a period is exactly what this PDF reports for the same
 /// period.
-final _reportPrice = NumberFormat.currency(locale: 'en_IN', symbol: 'Rs. ', decimalDigits: 0);
+final _reportPrice = NumberFormat.currency(locale: 'en_IN', symbol: 'Rs. ', decimalDigits: 2);
 
 class _ReportProductAgg {
   final String name;

@@ -28,6 +28,10 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>4B Mobiles uses your camera to scan product barcodes when adding or selling products.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>4B Mobiles uses your microphone so you can speak a note instead of typing it.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>4B Mobiles converts your spoken note to text on this device.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -12,7 +12,7 @@ import '../../../core/models/sale.dart';
 /// from the on-screen widgets in sales_history_screen.dart, but
 /// deliberately mirrors the same fields/order shown there so the PDF
 /// never surprises someone who already saw it on screen.
-final _pdfPrice = NumberFormat.currency(locale: 'en_IN', symbol: 'Rs. ', decimalDigits: 0);
+final _pdfPrice = NumberFormat.currency(locale: 'en_IN', symbol: 'Rs. ', decimalDigits: 2);
 final _pdfDateTime = DateFormat('d MMM yyyy, h:mm a');
 final _pdfDate = DateFormat('d MMM yyyy');
 

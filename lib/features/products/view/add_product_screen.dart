@@ -7,6 +7,7 @@ import '../../../core/repositories/product_repository.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/lookup_picker_dialog.dart';
+import '../../../core/widgets/voice_note_field.dart';
 import '../bloc/add_product_bloc.dart';
 import '../bloc/add_product_event.dart';
 import '../bloc/add_product_state.dart';
@@ -76,7 +77,7 @@ class _AddProductViewState extends State<_AddProductView> {
   final _stockCtrl = TextEditingController();
   final _skuCtrl = TextEditingController();
   final _barcodeCtrl = TextEditingController();
-  final _descCtrl = TextEditingController();
+  final _descCtrl = LanguageTaggedTextController();
 
   String? _category;
   String? _brand;
@@ -570,25 +571,13 @@ class _AddProductViewState extends State<_AddProductView> {
                         ],
                       ),
                       const SizedBox(height: 7),
-                      Container(
+                      VoiceNoteFieldBody(
+                        controller: _descCtrl,
                         constraints: const BoxConstraints(minHeight: 80),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: p.card,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: p.border),
-                        ),
-                        child: TextField(
-                          controller: _descCtrl,
-                          maxLines: null,
-                          style: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
-                          decoration: const InputDecoration(
-                            border: InputBorder.none,
-                            isDense: true,
-                            hintText: 'Add key features, specifications, or warranty details...',
-                            hintStyle: TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF9C9CA6)),
-                          ),
-                        ),
+                        textStyle: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
+                        hintText: 'Add key features, specifications, or warranty details...',
+                        hintStyle: const TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF9C9CA6)),
                       ),
                     ],
                   ),

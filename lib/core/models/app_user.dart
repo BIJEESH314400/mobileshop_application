@@ -2,8 +2,10 @@ enum AppRole { owner, employee }
 
 /// Who is actually signed in right now — resolved once per session by
 /// CurrentUserRepository from Firebase Auth plus (for employees) their
-/// `employees` Firestore document. Profile and Chat both need this to
-/// show the right name and decide owner-only vs employee-only UI.
+/// `employees` Firestore document, plus an optional `userProfiles`
+/// override document either role can edit from Profile's own Edit
+/// Profile screen. Profile and Chat both need this to show the right
+/// name and decide owner-only vs employee-only UI.
 class AppUser {
   final String uid;
   final String username;
@@ -16,12 +18,18 @@ class AppUser {
   /// someone's set/verified one via Profile's Recovery Email flow.
   final String email;
 
+  /// A phone number typed into Edit Profile -- purely informational
+  /// (no verification, unlike email), defaults to '' for anyone who
+  /// hasn't set one yet.
+  final String phone;
+
   const AppUser({
     required this.uid,
     required this.username,
     required this.displayName,
     required this.role,
     required this.email,
+    this.phone = '',
   });
 
   bool get isOwner => role == AppRole.owner;

@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/widgets/confirm_delete_dialog.dart';
+import '../../../core/widgets/voice_note_field.dart';
 
 /// Full-page "Add Customer" form -- a 4-step wizard (Personal -> Location
 /// -> Business -> Review), redesigned 2026-10-01 from the original
@@ -77,7 +78,7 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
   final _businessNameCtrl = TextEditingController();
   final _gstCtrl = TextEditingController();
 
-  final _notesCtrl = TextEditingController();
+  final _notesCtrl = LanguageTaggedTextController();
 
   static const _stepTitles = ['Personal', 'Location', 'Business', 'Review'];
 
@@ -1164,7 +1165,7 @@ class _BusinessFields extends StatelessWidget {
 /// monthly") without needing a pre-defined tag to match it to.
 class _NotesFields extends StatelessWidget {
   final AppPalette palette;
-  final TextEditingController notesCtrl;
+  final LanguageTaggedTextController notesCtrl;
 
   const _NotesFields({required this.palette, required this.notesCtrl});
 
@@ -1175,12 +1176,14 @@ class _NotesFields extends StatelessWidget {
       children: [
         _FieldLabel('NOTES', required: false, palette: palette, trailing: 'Optional'),
         const SizedBox(height: 6),
-        _MultilineTextBox(
-          palette: palette,
+        VoiceNoteFieldBody(
           controller: notesCtrl,
-          hint: 'e.g. prefers WhatsApp updates, pays on credit, settle monthly...',
           minLines: 3,
           maxLines: 5,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          textStyle: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: palette.textPrimary),
+          hintText: 'e.g. prefers WhatsApp updates, pays on credit, settle monthly...',
+          hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF9C9CA6), fontWeight: FontWeight.w400),
         ),
       ],
     );

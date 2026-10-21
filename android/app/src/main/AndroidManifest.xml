@@ -6,6 +6,16 @@
          Sales/POS) — mobile_scanner's own manifest already declares this,
          but it's spelled out here too so it's visible in one place. -->
     <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- For Shop Details "Pick on Map": geolocator reads the
+         device's current GPS position to center the map and let
+         the owner pin their shop's exact location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- For the voice-note mic button on Description/Notes fields:
+         speech_to_text records through the device's microphone and
+         feeds it to the platform's own on-device speech recognizer
+         (no account, API key, or network service of ours involved). -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="4B Mobiles"
         android:name="${applicationName}"
@@ -47,6 +57,13 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Required on Android 11+ so speech_to_text can actually see
+             the device's speech-recognition service (package
+             visibility restrictions otherwise hide it, and
+             initialize() would just report "not available"). -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

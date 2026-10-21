@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/widgets/confirm_delete_dialog.dart';
+import '../../../core/widgets/voice_note_field.dart';
 import '../../sales/view/customer_picker_sheet.dart';
 
 /// Add/Edit Service Job -- same "one form, optional existing-record
@@ -34,7 +35,7 @@ class _AddServiceJobScreenState extends State<AddServiceJobScreen> {
   final _titleCtrl = TextEditingController();
   final _deviceCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
-  final _notesCtrl = TextEditingController();
+  final _notesCtrl = LanguageTaggedTextController();
 
   Customer? _customer;
   bool _saving = false;
@@ -325,25 +326,13 @@ class _AddServiceJobScreenState extends State<AddServiceJobScreen> {
                     ],
                   ),
                   const SizedBox(height: 7),
-                  Container(
+                  VoiceNoteFieldBody(
+                    controller: _notesCtrl,
                     constraints: const BoxConstraints(minHeight: 80),
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: p.card,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: p.border),
-                    ),
-                    child: TextField(
-                      controller: _notesCtrl,
-                      maxLines: null,
-                      style: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        isDense: true,
-                        hintText: 'What the customer reported, what was found, anything to remember...',
-                        hintStyle: TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF9C9CA6)),
-                      ),
-                    ),
+                    textStyle: TextStyle(fontSize: 13.5, height: 1.5, color: p.textSecondary),
+                    hintText: 'What the customer reported, what was found, anything to remember...',
+                    hintStyle: const TextStyle(fontSize: 13.5, height: 1.5, color: Color(0xFF9C9CA6)),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 14),
