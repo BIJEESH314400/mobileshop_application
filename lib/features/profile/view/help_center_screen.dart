@@ -338,7 +338,7 @@ class _ContactButton extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: AppColors.accent),
             const SizedBox(width: 10),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.accent))),
+            Expanded(child: Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.accent))),
             Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.accent),
           ],
         ),

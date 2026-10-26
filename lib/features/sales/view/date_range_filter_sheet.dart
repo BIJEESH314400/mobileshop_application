@@ -909,7 +909,7 @@ class _SheetBottomBar extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(color: AppColors.iconTint, borderRadius: BorderRadius.circular(8)),
-                  child: Text('$count Selected', style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.accent)),
+                  child: Text('$count Selected', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.accent)),
                 ),
             ],
           ),

@@ -156,9 +156,9 @@ class _ForgotPasswordViewState extends State<_ForgotPasswordView> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.arrow_back_rounded, size: 15, color: AppColors.accent),
+                                  Icon(Icons.arrow_back_rounded, size: 15, color: AppColors.accent),
                                   const SizedBox(width: 5),
-                                  const Text(
+                                  Text(
                                     'Back to Sign In',
                                     style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.accent),
                                   ),
@@ -207,7 +207,7 @@ class _ForgotField extends StatelessWidget {
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: palette.border)),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: palette.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.accent)),
           ),
         ),
       ],

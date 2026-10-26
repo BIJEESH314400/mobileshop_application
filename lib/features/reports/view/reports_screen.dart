@@ -515,7 +515,7 @@ class _ProductBar extends StatelessWidget {
             value: fraction,
             minHeight: 6,
             backgroundColor: palette.divider,
-            valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+            valueColor: AlwaysStoppedAnimation(AppColors.accent),
           ),
         ),
       ],

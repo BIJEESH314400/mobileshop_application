@@ -381,7 +381,7 @@ class _PickShopLocationScreenState extends State<PickShopLocationScreen> {
                               point: _picked!,
                               width: 40,
                               height: 40,
-                              child: const Icon(Icons.location_pin, size: 40, color: AppColors.accent),
+                              child: Icon(Icons.location_pin, size: 40, color: AppColors.accent),
                             ),
                         ],
                       ),

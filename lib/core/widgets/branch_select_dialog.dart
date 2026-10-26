@@ -65,7 +65,7 @@ class BranchSelectDialog extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.storefront_outlined, size: 18, color: AppColors.accent),
+                        Icon(Icons.storefront_outlined, size: 18, color: AppColors.accent),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(

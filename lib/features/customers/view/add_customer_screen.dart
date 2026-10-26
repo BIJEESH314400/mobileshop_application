@@ -583,7 +583,7 @@ class _Header extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'STEP ${stepIndex + 1} OF ${stepTitles.length}: ${stepTitles[stepIndex].toUpperCase()}',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 0.4),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.accent, letterSpacing: 0.4),
                 ),
               ],
             ),
@@ -1257,7 +1257,7 @@ class _ReviewSection extends StatelessWidget {
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: onEdit,
-                child: const Text(
+                child: Text(
                   'Edit',
                   style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
                 ),

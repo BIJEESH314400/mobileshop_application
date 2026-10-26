@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app.dart';
+import 'core/theme/app_colors.dart';
 import 'features/theme/bloc/theme_bloc.dart';
 
 void main() {
@@ -46,7 +47,14 @@ void main() {
     // mode on every launch while a dark-mode preference loads.
     final initialThemeMode = await ThemeBloc.loadSavedMode();
 
-    runApp(MobileShopApp(initialThemeMode: initialThemeMode));
+    // Same reasoning, for the saved accent-color theme (2026-10-22,
+    // "6 app themes" feature) -- AppColors.accent must be set to the
+    // saved choice before the very first frame builds, or the launch
+    // would flash the default indigo before correcting itself.
+    final initialThemeColor = await ThemeBloc.loadSavedThemeColor();
+    AppColors.accent = initialThemeColor.color;
+
+    runApp(MobileShopApp(initialThemeMode: initialThemeMode, initialThemeColor: initialThemeColor));
   }, (error, stackTrace) {
     // Catches everything else -- anything thrown outside the Flutter
     // framework's own error handling (an uncaught Future error, or

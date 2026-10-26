@@ -810,7 +810,7 @@ class _SectionList extends StatelessWidget {
             Text(title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: palette.textPrimary)),
             GestureDetector(
               onTap: () => Navigator.of(context).pushNamed(viewAllRoute),
-              child: const Text(
+              child: Text(
                 'View all',
                 style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
               ),

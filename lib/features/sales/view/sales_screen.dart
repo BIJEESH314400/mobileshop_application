@@ -221,7 +221,7 @@ class _SalesViewState extends State<_SalesView> {
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(color: const Color(0xFFD8D8E0), width: 1.5, style: BorderStyle.solid),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(Icons.add_rounded, size: 16, color: AppColors.accent),
@@ -394,7 +394,7 @@ class _SalesViewState extends State<_SalesView> {
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: p.border)),
                             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: p.border)),
-                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.accent)),
                           ),
                         ),
                         const SizedBox(height: 18),
@@ -939,7 +939,7 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                                           width: 44,
                                           height: 44,
                                           decoration: BoxDecoration(color: AppColors.iconTint, borderRadius: BorderRadius.circular(12)),
-                                          child: const Icon(Icons.inventory_2_outlined, size: 20, color: AppColors.accent),
+                                          child: Icon(Icons.inventory_2_outlined, size: 20, color: AppColors.accent),
                                         ),
                                         const SizedBox(width: 12),
                                         Expanded(
@@ -1185,7 +1185,7 @@ class _CartItemCard extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(color: AppColors.iconTint, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.smartphone_rounded, size: 20, color: AppColors.accent),
+                child: Icon(Icons.smartphone_rounded, size: 20, color: AppColors.accent),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -1415,7 +1415,7 @@ class _BarcodeSlotRowState extends State<_BarcodeSlotRow> {
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: p.border)),
                                 enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: p.border)),
-                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.accent)),
+                                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: AppColors.accent)),
                               ),
                             ),
                           ),
@@ -1474,7 +1474,7 @@ class _QuickChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: AppColors.border),
         ),
-        child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accent)),
+        child: Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accent)),
       ),
     );
   }
@@ -1655,7 +1655,7 @@ class _CompleteSaleConfirmSheet extends StatelessWidget {
                             height: 34,
                             decoration: const BoxDecoration(color: AppColors.iconTint, shape: BoxShape.circle),
                             alignment: Alignment.center,
-                            child: const Icon(Icons.person_outline_rounded, size: 17, color: AppColors.accent),
+                            child: Icon(Icons.person_outline_rounded, size: 17, color: AppColors.accent),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -1786,7 +1786,7 @@ class _CompleteSaleConfirmSheet extends StatelessWidget {
                 height: 54,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [AppColors.accent, AppColors.purple]),
+                  gradient: LinearGradient(colors: [AppColors.accent, AppColors.purple]),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Row(

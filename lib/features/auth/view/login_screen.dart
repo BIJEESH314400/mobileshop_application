@@ -155,7 +155,7 @@ class _LoginViewState extends State<_LoginView> {
                         minimumSize: const Size(0, 0),
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: const Text(
+                      child: Text(
                         'Forgot password?',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent),
                       ),
@@ -201,7 +201,7 @@ class _LoginViewState extends State<_LoginView> {
                         ),
                         GestureDetector(
                           onTap: () => _comingSoon(context, 'Create account'),
-                          child: const Text(
+                          child: Text(
                             'Create account',
                             style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.accent),
                           ),
@@ -306,7 +306,7 @@ class _LabeledFieldState extends State<_LabeledField> {
             counterText: '',
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: palette.border)),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: palette.border)),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.accent)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppColors.accent)),
           ),
         ),
       ],

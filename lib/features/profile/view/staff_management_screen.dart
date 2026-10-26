@@ -158,7 +158,7 @@ class _EmployeeRow extends StatelessWidget {
                 height: 42,
                 decoration: const BoxDecoration(color: AppColors.iconTint, shape: BoxShape.circle),
                 alignment: Alignment.center,
-                child: const Icon(Icons.person_rounded, size: 20, color: AppColors.accent),
+                child: Icon(Icons.person_rounded, size: 20, color: AppColors.accent),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -271,7 +271,7 @@ class _EmployeeDetailSheetState extends State<_EmployeeDetailSheet> {
                   height: 46,
                   decoration: const BoxDecoration(color: AppColors.iconTint, shape: BoxShape.circle),
                   alignment: Alignment.center,
-                  child: const Icon(Icons.person_rounded, size: 22, color: AppColors.accent),
+                  child: Icon(Icons.person_rounded, size: 22, color: AppColors.accent),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

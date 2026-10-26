@@ -157,7 +157,7 @@ class _ConversationViewState extends State<_ConversationView> {
                           height: 32,
                           decoration: const BoxDecoration(color: AppColors.iconTint, shape: BoxShape.circle),
                           alignment: Alignment.center,
-                          child: const Icon(Icons.person_rounded, size: 16, color: AppColors.accent),
+                          child: Icon(Icons.person_rounded, size: 16, color: AppColors.accent),
                         ),
                         const SizedBox(width: 10),
                         BlocBuilder<ConversationBloc, ConversationState>(
@@ -292,7 +292,7 @@ class _ConversationViewState extends State<_ConversationView> {
                     child: Container(
                       width: 44,
                       height: 44,
-                      decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
                       alignment: Alignment.center,
                       child: const Icon(Icons.send_rounded, size: 19, color: Colors.white),
                     ),

@@ -118,7 +118,7 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                     ),
                     GestureDetector(
                       onTap: _addNew,
-                      child: const Row(
+                      child: Row(
                         children: [
                           Icon(Icons.add_rounded, size: 18, color: AppColors.accent),
                           SizedBox(width: 4),
@@ -171,7 +171,7 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                       leading: Icon(Icons.storefront_outlined, color: p.textSecondary),
                       title: Text('Walk-in customer', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
                       subtitle: Text('No customer recorded for this sale', style: TextStyle(fontSize: 12, color: p.textSecondary)),
-                      trailing: _selected == null ? const Icon(Icons.check_circle_rounded, color: AppColors.accent) : null,
+                      trailing: _selected == null ? Icon(Icons.check_circle_rounded, color: AppColors.accent) : null,
                       onTap: () => Navigator.of(context).pop(const CustomerPickerResult(cleared: true)),
                     ),
                     Divider(color: p.divider, height: 20),
@@ -190,11 +190,11 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                           contentPadding: EdgeInsets.zero,
                           leading: CircleAvatar(
                             backgroundColor: AppColors.accent.withOpacity(0.12),
-                            child: Text(customer.initials, style: const TextStyle(color: AppColors.accent, fontSize: 13, fontWeight: FontWeight.w700)),
+                            child: Text(customer.initials, style: TextStyle(color: AppColors.accent, fontSize: 13, fontWeight: FontWeight.w700)),
                           ),
                           title: Text(customer.name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
                           subtitle: customer.phone.isEmpty ? null : Text(customer.phone, style: TextStyle(fontSize: 12, color: p.textSecondary)),
-                          trailing: _selected?.id == customer.id ? const Icon(Icons.check_circle_rounded, color: AppColors.accent) : null,
+                          trailing: _selected?.id == customer.id ? Icon(Icons.check_circle_rounded, color: AppColors.accent) : null,
                           onTap: () => Navigator.of(context).pop(CustomerPickerResult(customer: customer)),
                         ),
                   ],

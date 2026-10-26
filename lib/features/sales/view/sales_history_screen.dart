@@ -381,7 +381,7 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
                   _searchCtrl.clear();
                   _dateRange = null;
                 }),
-                child: const Text('Clear filters', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w700)),
+                child: Text('Clear filters', style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w700)),
               ),
             ],
           ),
@@ -577,7 +577,7 @@ class _OrdersStatCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(width: 7, height: 7, decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle)),
+              Container(width: 7, height: 7, decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle)),
               const SizedBox(width: 6),
               Text(
                 'ORDERS',
@@ -790,7 +790,7 @@ class _DateGroupHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(width: 6, height: 6, decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle)),
+              Container(width: 6, height: 6, decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle)),
               const SizedBox(width: 6),
               Text(
                 label.toUpperCase(),
@@ -853,7 +853,7 @@ class _PaymentStyle {
 _PaymentStyle _paymentStyle(String method) {
   switch (method) {
     case 'upi':
-      return const _PaymentStyle(Icons.qr_code_rounded, AppColors.iconTint, AppColors.accent);
+      return _PaymentStyle(Icons.qr_code_rounded, AppColors.iconTint, AppColors.accent);
     case 'card':
       return const _PaymentStyle(Icons.credit_card_rounded, AppColors.successBg, AppColors.success);
     default: // 'cash'
@@ -931,7 +931,7 @@ class _SaleRowContent extends StatelessWidget {
                       ),
                       if (sale.soldByName.isNotEmpty) ...[
                         Text('  •  ', style: TextStyle(fontSize: 11.5, color: palette.textSecondary)),
-                        const Icon(Icons.person_outline_rounded, size: 11, color: AppColors.accent),
+                        Icon(Icons.person_outline_rounded, size: 11, color: AppColors.accent),
                         const SizedBox(width: 2),
                         Flexible(
                           child: Text(
@@ -942,7 +942,7 @@ class _SaleRowContent extends StatelessWidget {
                             // the same, easy-to-spot color everywhere
                             // it shows -- not blended into the rest of
                             // the muted secondary-text row.
-                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.accent),
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.accent),
                           ),
                         ),
                       ],
@@ -1062,7 +1062,7 @@ class _CustomerLinkRowState extends State<_CustomerLinkRow> {
             const TextSpan(text: 'Customer: '),
             TextSpan(
               text: widget.sale.customerName.isEmpty ? '(unnamed)' : widget.sale.customerName,
-              style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent),
+              style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent),
             ),
           ],
         ),
@@ -1075,17 +1075,17 @@ class _CustomerLinkRowState extends State<_CustomerLinkRow> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_working)
-            const SizedBox(
+            SizedBox(
               width: 13,
               height: 13,
               child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppColors.accent)),
             )
           else
-            const Icon(Icons.person_add_alt_1_rounded, size: 14, color: AppColors.accent),
+            Icon(Icons.person_add_alt_1_rounded, size: 14, color: AppColors.accent),
           const SizedBox(width: 5),
           Text(
             _working ? 'Linking…' : 'Walk-in sale — tap to link a customer',
-            style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
+            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
           ),
         ],
       ),
@@ -1138,7 +1138,7 @@ void _showReceipt(BuildContext context, Sale sale, AppPalette palette) {
                       const TextSpan(text: 'Sold by '),
                       TextSpan(
                         text: '${sale.soldByName}${sale.soldByRole == 'owner' ? ' (Owner)' : ' (Staff)'}',
-                        style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent),
+                        style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent),
                       ),
                     ],
                   ),

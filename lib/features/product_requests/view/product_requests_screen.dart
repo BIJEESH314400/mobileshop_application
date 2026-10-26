@@ -187,7 +187,7 @@ class _RequestCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(color: AppColors.iconTint, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.accent),
+                child: Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.accent),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -230,7 +230,7 @@ class _RequestCard extends StatelessWidget {
                     height: 32,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(color: AppColors.iconTint, shape: BoxShape.circle),
-                    child: const Icon(Icons.call_outlined, size: 15, color: AppColors.accent),
+                    child: Icon(Icons.call_outlined, size: 15, color: AppColors.accent),
                   ),
                 ),
             ],

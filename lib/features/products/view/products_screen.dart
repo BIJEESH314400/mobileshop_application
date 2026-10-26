@@ -264,7 +264,7 @@ class _ProductsViewState extends State<_ProductsView> {
                 onPressed: () => context
                     .read<ProductsBloc>()
                     .add(const ProductsSubscriptionRequested()),
-                child: const Text('Retry',
+                child: Text('Retry',
                     style: TextStyle(
                         color: AppColors.accent, fontWeight: FontWeight.w700)),
               ),
@@ -428,7 +428,7 @@ class _ProductCard extends StatelessWidget {
               // A single generic icon for every product — categories are
               // open-ended now (owner-managed via the picker), so there's
               // no fixed list to map onto specific icons.
-              child: const Icon(Icons.inventory_2_outlined,
+              child: Icon(Icons.inventory_2_outlined,
                   size: 24, color: AppColors.accent),
             ),
             const SizedBox(width: 12),

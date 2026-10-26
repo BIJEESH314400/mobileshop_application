@@ -521,7 +521,7 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
               child: Container(
                 width: 28,
                 height: 28,
-                decoration: const BoxDecoration(shape: BoxShape.circle, color: AppColors.accent),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: AppColors.accent),
                 alignment: Alignment.center,
                 child: _busy
                     ? const SizedBox(

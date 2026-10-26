@@ -199,7 +199,7 @@ class _ShopDetailsViewState extends State<_ShopDetailsView> {
                               const SizedBox(width: 4),
                               Text(
                                 (_lat != null && _lng != null) ? 'Exact location pinned -- tap to change' : 'Pick on Map',
-                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
+                                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
                               ),
                             ],
                           ),

@@ -311,7 +311,7 @@ class _CustomerRow extends StatelessWidget {
                   height: 44,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.12), shape: BoxShape.circle),
-                  child: Text(customer.initials, style: const TextStyle(color: AppColors.accent, fontSize: 15, fontWeight: FontWeight.w700)),
+                  child: Text(customer.initials, style: TextStyle(color: AppColors.accent, fontSize: 15, fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

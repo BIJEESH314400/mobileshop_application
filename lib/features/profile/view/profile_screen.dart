@@ -25,6 +25,7 @@ import 'shop_details_screen.dart';
 import 'payment_settings_screen.dart';
 import 'tax_invoice_settings_screen.dart';
 import 'help_center_screen.dart';
+import 'theme_color_picker_sheet.dart';
 
 /// Profile — matches the CellPoint design canvas (account card, three
 /// grouped settings sections, Log Out).
@@ -171,6 +172,7 @@ class _ProfileViewState extends State<_ProfileView> {
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
     final darkOn = context.watch<ThemeBloc>().state.isDark;
+    final currentThemeColor = context.watch<ThemeBloc>().state.themeColor;
     final userState = context.watch<CurrentUserBloc>().state;
     final AppUser? user = userState.user;
 
@@ -240,7 +242,7 @@ class _ProfileViewState extends State<_ProfileView> {
                             Container(
                               width: 56,
                               height: 56,
-                              decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+                              decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
                               alignment: Alignment.center,
                               child: Text(
                                 _initials(displayName),
@@ -442,6 +444,19 @@ class _ProfileViewState extends State<_ProfileView> {
                                 // actually change the app's theme, not just its
                                 // own look.
                                 onChanged: (_) => context.read<ThemeBloc>().add(const ThemeToggled()),
+                                showBottomBorder: true,
+                              ),
+                              _MenuRow(
+                                palette: p,
+                                data: _MenuRowData(
+                                  icon: Icons.palette_outlined,
+                                  label: 'App Theme · ${currentThemeColor.label}',
+                                  // Separate from Dark Mode above -- this only
+                                  // changes the brand accent color (2026-10-22,
+                                  // "6 app themes" feature). See
+                                  // theme_color_picker_sheet.dart.
+                                  onTap: () => showThemeColorPickerSheet(context, current: currentThemeColor),
+                                ),
                                 showBottomBorder: true,
                               ),
                               _MenuRow(

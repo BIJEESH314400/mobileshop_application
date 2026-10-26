@@ -43,7 +43,7 @@ class InactivityAlertDialog extends StatelessWidget {
                 height: 44,
                 decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.12), shape: BoxShape.circle),
                 alignment: Alignment.center,
-                child: const Icon(Icons.timer_off_rounded, color: AppColors.accent, size: 22),
+                child: Icon(Icons.timer_off_rounded, color: AppColors.accent, size: 22),
               ),
               const SizedBox(height: 14),
               Text('App Inactive', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: p.textPrimary)),

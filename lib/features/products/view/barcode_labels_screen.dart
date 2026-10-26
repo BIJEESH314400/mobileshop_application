@@ -380,7 +380,7 @@ class _QtyStepper extends StatelessWidget {
             child: Text(
               '$qty',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.accent),
+              style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w800, color: AppColors.accent),
             ),
           ),
         ],

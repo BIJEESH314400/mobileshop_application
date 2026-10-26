@@ -181,7 +181,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
                       Container(
                         width: 64,
                         height: 64,
-                        decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
                         alignment: Alignment.center,
                         child: const Icon(Icons.lock_rounded, color: Colors.white, size: 28),
                       ),
@@ -217,7 +217,7 @@ class _PinUnlockScreenState extends State<PinUnlockScreen> {
                       if (_failCount >= _maxAttemptsBeforeFallback)
                         TextButton(
                           onPressed: _forceFullLogin,
-                          child: const Text(
+                          child: Text(
                             'Forgot PIN? Log in with password instead',
                             style: TextStyle(color: AppColors.accent, fontWeight: FontWeight.w700, fontSize: 12.5),
                           ),

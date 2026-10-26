@@ -480,7 +480,7 @@ class _AddProductViewState extends State<_AddProductView> {
                                   color: AppColors.iconTint,
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: const Icon(Icons.qr_code_scanner_rounded, size: 16, color: AppColors.accent),
+                                child: Icon(Icons.qr_code_scanner_rounded, size: 16, color: AppColors.accent),
                               ),
                             ),
                           ],
@@ -516,7 +516,7 @@ class _AddProductViewState extends State<_AddProductView> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: _checkingBarcode
-                                    ? const SizedBox(
+                                    ? SizedBox(
                                         width: 14,
                                         height: 14,
                                         child: CircularProgressIndicator(
@@ -524,7 +524,7 @@ class _AddProductViewState extends State<_AddProductView> {
                                           valueColor: AlwaysStoppedAnimation(AppColors.accent),
                                         ),
                                       )
-                                    : const Icon(Icons.qr_code_scanner_rounded, size: 16, color: AppColors.accent),
+                                    : Icon(Icons.qr_code_scanner_rounded, size: 16, color: AppColors.accent),
                               ),
                             ),
                           ],

@@ -355,7 +355,7 @@ class _RadioDot extends StatelessWidget {
       return Container(
         width: 20,
         height: 20,
-        decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
         child: const Icon(Icons.check_rounded, size: 13, color: Colors.white),
       );
     }

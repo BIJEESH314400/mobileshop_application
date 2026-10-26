@@ -141,7 +141,7 @@ class _ConversationRow extends StatelessWidget {
               height: 42,
               decoration: const BoxDecoration(color: AppColors.iconTint, shape: BoxShape.circle),
               alignment: Alignment.center,
-              child: const Icon(Icons.person_rounded, size: 20, color: AppColors.accent),
+              child: Icon(Icons.person_rounded, size: 20, color: AppColors.accent),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -173,7 +173,7 @@ class _ConversationRow extends StatelessWidget {
                 if (time.isNotEmpty) Text(time, style: TextStyle(fontSize: 11, color: palette.textSecondary)),
                 if (hasUnread) ...[
                   const SizedBox(height: 6),
-                  Container(width: 9, height: 9, decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle)),
+                  Container(width: 9, height: 9, decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle)),
                 ],
               ],
             ),

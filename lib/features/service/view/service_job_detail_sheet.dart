@@ -175,7 +175,7 @@ class _ServiceJobDetailSheetState extends State<_ServiceJobDetailSheet> {
                   GestureDetector(
                     onTap: _edit,
                     child: Row(
-                      children: const [
+                      children: [
                         Icon(Icons.edit_outlined, size: 15, color: AppColors.accent),
                         SizedBox(width: 4),
                         Text('Edit', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.accent)),
@@ -213,7 +213,7 @@ class _ServiceJobDetailSheetState extends State<_ServiceJobDetailSheet> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.call_outlined, size: 16, color: AppColors.accent),
+                          Icon(Icons.call_outlined, size: 16, color: AppColors.accent),
                           const SizedBox(width: 8),
                           Text('Call ${job.customerName}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: p.textPrimary)),
                         ],

@@ -223,7 +223,7 @@ class _PrinterSettingsViewState extends State<_PrinterSettingsView> {
                                   color: AppColors.accent.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
-                                child: const Icon(Icons.print_outlined, color: AppColors.accent),
+                                child: Icon(Icons.print_outlined, color: AppColors.accent),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -237,7 +237,7 @@ class _PrinterSettingsViewState extends State<_PrinterSettingsView> {
                                   onTap: _testing ? null : _testPrint,
                                   child: _testing
                                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                                      : const Text(
+                                      : Text(
                                           'Test Print',
                                           style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.accent),
                                         ),
@@ -320,7 +320,7 @@ class _DeviceRow extends StatelessWidget {
                 ],
               ),
             ),
-            if (selected) const Icon(Icons.check_circle_rounded, size: 20, color: AppColors.accent),
+            if (selected) Icon(Icons.check_circle_rounded, size: 20, color: AppColors.accent),
           ],
         ),
       ),

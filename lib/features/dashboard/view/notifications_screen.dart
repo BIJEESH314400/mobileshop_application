@@ -63,7 +63,7 @@ class NotificationsScreen extends StatelessWidget {
                               height: 64,
                               decoration: const BoxDecoration(color: AppColors.iconTint, shape: BoxShape.circle),
                               alignment: Alignment.center,
-                              child: const Icon(Icons.notifications_none_rounded, size: 30, color: AppColors.accent),
+                              child: Icon(Icons.notifications_none_rounded, size: 30, color: AppColors.accent),
                             ),
                             const SizedBox(height: 14),
                             Text(
@@ -113,7 +113,7 @@ class NotificationsScreen extends StatelessWidget {
                                 height: 44,
                                 decoration: const BoxDecoration(color: AppColors.iconTint, shape: BoxShape.circle),
                                 alignment: Alignment.center,
-                                child: const Icon(Icons.mark_chat_unread_rounded, size: 20, color: AppColors.accent),
+                                child: Icon(Icons.mark_chat_unread_rounded, size: 20, color: AppColors.accent),
                               ),
                               const SizedBox(width: 12),
                               Expanded(

@@ -2,18 +2,27 @@ import 'package:flutter/material.dart';
 
 /// Brand colors, matching the CellPoint design.
 ///
-/// The `dark*` / `*Dark` constants below are prep for the "2 themes"
-/// requirement — not wired into MaterialApp yet (that still needs a
-/// `darkTheme:` + `themeMode:` on MobileShopApp, and ideally a saved
-/// user preference). AppBottomNav already reads `Theme.of(context)
-/// .brightness` and picks between the two sets, so once the app-wide
-/// dark ThemeData lands, the bottom bar switches automatically with
-/// zero changes here.
+/// Dark mode IS wired into MaterialApp (ThemeBloc + app.dart) — the
+/// `dark*` / `*Dark` constants below are its dark-mode set, consumed
+/// via AppPalette rather than directly in most places.
 class AppColors {
   AppColors._();
 
+  // `accent` is deliberately NOT `const` (2026-10-22, "6 app themes"
+  // feature) -- it's the one color that changes when the user picks a
+  // theme in Profile > App Theme. Every other color below stays a
+  // fixed `const`; this is the sole runtime-mutable one. Set from the
+  // saved preference before runApp() (see main.dart) and again
+  // whenever ThemeBloc handles a ThemeColorChanged event, so every
+  // `AppColors.accent` read anywhere in the app reflects the current
+  // choice the next time that widget rebuilds -- which (via
+  // AppPalette.of(context)/Theme.of(context) already being called in
+  // the same build() almost everywhere this app styles a screen) is
+  // immediate, the same way the light/dark toggle already propagates
+  // app-wide with zero per-screen wiring.
+  static Color accent = const Color(0xFF4F5AED);
+
   // Light theme (current default)
-  static const accent = Color(0xFF4F5AED);
   static const background = Color(0xFFFAFAF9);
   static const card = Color(0xFFFFFFFF);
   static const textPrimary = Color(0xFF1C1C24);
