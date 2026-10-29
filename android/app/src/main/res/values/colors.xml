@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the dark splash screen's background color
+         (lib/features/splash/view/splash_screen.dart, _bgTop). Used
+         by the native launch_background drawables below so there is
+         no white flash before the Dart splash screen takes over.
+         Added 2026-10-28. -->
+    <color name="launch_background">#FF0C1020</color>
+</resources>

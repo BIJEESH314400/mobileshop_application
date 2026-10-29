@@ -1,0 +1,269 @@
+ rules_version = '2';
+
+// Firestore security rules for 4B Mobiles.
+//
+// There is no separate backend/Admin SDK in this app -- every read
+// and write comes straight from the Flutter client via the Firebase
+// SDKs. These rules are therefore the ONLY thing standing between a
+// signed-in account and the rest of the database; the app's own
+// screens hiding a button is not security, just UI convenience.
+//
+// Role check mirrors CurrentUserRepository.loadCurrentUser() on the
+// client exactly: an `employees/{uid}` document exists only for
+// employee accounts, so anyone signed in WITHOUT one is treated as
+// the shop owner. There is only ever one owner account today (created
+// by hand in the Firebase console) -- if that ever changes, this
+// function is the one place to revisit.
+//
+// Added 2026-09-23 -- see the project status doc's "Firestore
+// security rules" section for the discussion behind each choice.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isEmployee() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/employees/$(request.auth.uid));
+    }
+
+    function isOwner() {
+      return isSignedIn() && !isEmployee();
+    }
+
+    // ---- Products ----
+    // Everyone signed in can read (needed to sell/checkout, and to
+    // show stock on Dashboard/Products). Owner and employees can both
+    // add/edit -- staff can restock without the owner around.
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner() || isEmployee();
+    }
+
+    // ---- Product Units (added 2026-10-14) ----
+    // One doc per individually-tracked physical unit (e.g. one
+    // specific phone), minted from Print Barcode Labels' "Unique code
+    // per sticker" toggle -- see ProductUnit's own doc comment. Same
+    // read/write shape as products: any signed-in user can read
+    // (Sales scanning needs to look a code up), and owner or employee
+    // can write (generating new units when printing labels, and
+    // completeSale's transaction marking one 'sold').
+    match /product_units/{unitId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner() || isEmployee();
+    }
+
+    // ---- Product Unit Counters (added 2026-10-15) ----
+    // One doc per (shop, category-code, brand-code) combination,
+    // holding the running count ProductUnitRepository.generateUnits
+    // increments to build each unique unit code's digits (e.g.
+    // "SP-SAM-00000001") -- same read/write shape as product_units
+    // itself, since minting a new unit always writes both together in
+    // one transaction.
+    match /product_unit_counters/{counterId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner() || isEmployee();
+    }
+
+    // ---- Categories, brands ----
+    // Changed 2026-10-14: these were originally open to employee
+    // writes too (same as products, above), but the owner decided the
+    // product-catalog taxonomy itself -- which categories and brands
+    // exist at all -- should be an owner-only decision, managed from
+    // the new Manage Categories & Brands screen, while staff still
+    // freely pick from the existing lists when adding a product (that
+    // only ever reads/writes `products`, not these two). Read stays
+    // open to everyone signed in -- Add Product's pickers need it.
+    match /categories/{categoryId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+    match /brands/{brandId} {
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // ---- Sales ----
+    // Read: any signed-in user -- Dashboard shows Recent Sales/stat
+    // cards to owner AND employee logins today, so this has to stay
+    // open to both or Dashboard silently breaks for staff (see the
+    // status doc for that discussion). The dedicated Sales
+    // History/Reports screens are still only reachable from an
+    // owner-only Profile menu, so staff still can't casually browse
+    // full sales history through the app's own UI.
+    // Create: any signed-in user -- checkout is used by whoever's on
+    // shift. Update/delete: never -- a completed sale is a permanent
+    // record, matching SaleRepository, which only ever creates one.
+    match /sales/{saleId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      // Update is allowed ONLY to re-link which customer a sale is
+      // attached to (added 2026-10-06, so a "Walk-in customer" sale
+      // can be linked to a real customer afterward) -- every other
+      // field (items, prices, total, payment method, soldBy*,
+      // createdAt...) stays permanently locked. affectedKeys().hasOnly
+      // checks the exact set of changed keys is a subset of these 3 --
+      // any write that also touches another field is rejected.
+      allow update: if isSignedIn() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['customerId', 'customerName', 'customerPhone']);
+      allow delete: if false;
+    }
+
+    // ---- Employees ----
+    // Owner manages the staff list; an employee can read their own
+    // record (Profile needs this to show their name/role) but not
+    // anyone else's, and never writes to it themselves -- accounts
+    // are only ever created by the owner, via
+    // EmployeeRepository.addEmployee.
+    match /employees/{employeeUid} {
+      allow read: if isOwner() || (isSignedIn() && request.auth.uid == employeeUid);
+      allow write: if isOwner();
+    }
+
+    // ---- Username -> email lookup (Login + Forgot Password) ----
+    // Read deliberately open to EVERYONE, signed in or not -- both
+    // Login (to resolve which real email to sign in with) and Forgot
+    // Password (explicitly for someone who CAN'T sign in) need this
+    // lookup to work before any auth exists, which an isSignedIn()
+    // read rule would block. This is the one place in these rules that
+    // trades a small amount of information exposure (someone who knows
+    // or guesses a username can see which email it maps to) for a
+    // lookup that has to happen pre-auth -- there's no server/Admin SDK
+    // in this app to do it another way (see the top-of-file note).
+    // Write: owner can write any username doc. An employee can ALSO
+    // write -- but only the one doc whose id matches their OWN stored
+    // username (employees/{uid}.username) -- added 2026-10-09 so an
+    // employee can self-update their own recovery email once Firebase
+    // Auth confirms it (see CurrentUserRepository's self-healing sync),
+    // without being able to touch anyone else's entry.
+    match /usernames/{username} {
+      allow read: if true;
+      allow write: if isOwner() ||
+        (isEmployee() && get(/databases/$(database)/documents/employees/$(request.auth.uid)).data.username == username);
+    }
+
+    // ---- Customers (added 2026-09-24) ----
+    // The shop's own customer directory, plus each customer's link
+    // from a Sale (Sale.customerId/customerName/customerPhone).
+    // Same read/write shape as products/categories/brands: any
+    // signed-in user (owner or employee) can read the full list and
+    // add/edit a customer -- checkout is used by whoever's on shift,
+    // and they need to be able to search/add a customer while ringing
+    // up a sale, not just the owner.
+    match /customers/{customerId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ---- Service Jobs (added 2026-10-06) ----
+    // Repair/service jobs, optionally linked to a customer. Same
+    // read/write shape as products/customers: any signed-in user
+    // (owner or employee) can read the full list and add/edit a job --
+    // staff need to create new jobs and move them through status
+    // (Pending -> In Progress -> Ready -> Completed) from the shop
+    // floor, not just the owner.
+    match /serviceJobs/{jobId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ---- Product Requests (added 2026-10-07) ----
+    // "Customer is waiting for this out-of-stock product" records,
+    // logged from the Sales screen's product picker. Same read/write
+    // shape as customers/serviceJobs -- any signed-in user (owner or
+    // employee) can log a new request while ringing up a sale, and
+    // mark one fulfilled later once the product is back in stock and
+    // handed over.
+    match /productRequests/{requestId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ---- Quick PIN (added 2026-09-24) ----
+    // A salted-hash PIN per account, used only to re-gate an ALREADY
+    // signed-in session on app open/resume (see IdleLockGate / the
+    // status doc's "Quick PIN" section) -- never a replacement for the
+    // real Firebase Auth login. Each account can only read/write its
+    // own PIN doc; nobody, including the owner, can read someone
+    // else's hash+salt.
+    match /pins/{uid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---- Chat: conversations + messages ----
+    // Strictly owner <-> one specific employee. The conversation doc's
+    // id IS that employee's uid (see the Conversation model's own doc
+    // comment), so comparing request.auth.uid to the path segment is
+    // all that's needed to keep every other employee out of it.
+    match /conversations/{employeeUid} {
+      allow read, write: if isOwner() || (isSignedIn() && request.auth.uid == employeeUid);
+
+      match /messages/{messageId} {
+        allow read, write: if isOwner() || (isSignedIn() && request.auth.uid == employeeUid);
+      }
+    }
+
+    // ---- User Profiles (added 2026-10-16) ----
+    // A self-editable override for display name + phone, written from
+    // Profile's own Edit Profile screen -- kept separate from
+    // `employees/{uid}` (owner-only writes there, and it carries
+    // login-critical fields) and from anything owner-specific (there's
+    // no document for the owner at all otherwise). Anyone signed in
+    // can only ever read or write their OWN doc, and only ever these
+    // two fields -- not shopId, role, or anything else.
+    match /userProfiles/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if isSignedIn() && request.auth.uid == uid &&
+        request.resource.data.keys().hasOnly(['name', 'phone']);
+    }
+
+    // ---- Shop Details (added 2026-10-19) ----
+    // The shop's own business info (name/address/phone) -- owner-only,
+    // both read and write. This is deliberately stricter than
+    // userProfiles above: there's only one shop record, it's shown on
+    // receipts/reports, and employees have no reason to read or
+    // change it, matching the "owner only" scope decided for this
+    // screen.
+    match /shopDetails/{shopId} {
+      // Read widened 2026-10-21: the shop's name/address/phone is now
+      // printed on every receipt and report PDF (sales_pdf.dart,
+      // report_pdf.dart, receipt_escpos.dart), and any signed-in
+      // employee can print one, not just the owner. Write stays
+      // owner-only -- only Shop Details' own screen (OwnerOnlyGate)
+      // ever changes this.
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // ---- Payment Settings (added 2026-10-19) ----
+    // UPI id + bank account display info -- owner-only, both read and
+    // write, same reasoning as Shop Details above: one record per
+    // shop, shown on receipts/invoices, employees have no reason to
+    // touch it.
+    match /paymentSettings/{shopId} {
+      allow read, write: if isOwner();
+    }
+
+    // ---- Tax & Invoice Settings (added 2026-10-19) ----
+    // GSTIN + the GST rate Sales checkout actually uses, plus
+    // invoice prefix/footer note -- owner-only, both read and write,
+    // same reasoning as Shop Details/Payment Settings above: one
+    // record per shop, employees have no reason to touch it.
+    match /taxInvoiceSettings/{shopId} {
+      // Read widened 2026-10-21, same reasoning as shopDetails above --
+      // GSTIN/invoice prefix/footer note are now printed on receipts
+      // and reports too, and this was already silently needed (and
+      // silently failing-open to the 18% default) for SalesBloc's own
+      // checkout tax-rate read by an employee. Write stays owner-only.
+      allow read: if isSignedIn();
+      allow write: if isOwner();
+    }
+
+    // Everything else is denied by default -- Firestore rules deny
+    // any path with no matching `match` block above, so no explicit
+    // catch-all is needed.
+  }
+}

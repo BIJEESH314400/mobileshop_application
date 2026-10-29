@@ -6,3 +6,10 @@ build/
 *.iml
 .idea/
 .vscode/
+
+
+# One-off Python scripts used to script bulk Dart edits during
+# development (e.g. via Claude) -- never part of the app itself,
+# should never be committed. Added 2026-10-29 after 79 of these had
+# quietly accumulated at the project root and gotten git-added.
+*.py
