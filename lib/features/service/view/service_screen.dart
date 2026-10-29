@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/models/service_job.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/exit_confirm_dialog.dart';
 import '../bloc/service_bloc.dart';
 import '../bloc/service_event.dart';
 import '../bloc/service_state.dart';
@@ -57,7 +59,19 @@ class _ServiceViewState extends State<_ServiceView> {
     final p = AppPalette.of(context);
     final wantStatus = _tabStatus[_tab];
 
-    return Scaffold(
+    // Service is a navigation root reached via AppBottomNav's
+    // pushReplacement -- nothing left in the stack to pop back to.
+    // Added 2026-10-28, same reasoning/wiring as DashboardScreen.
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final shouldExit = await ExitConfirmDialog.show(context);
+        if (shouldExit == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: p.background,
       body: SafeArea(
         child: Column(
@@ -169,6 +183,7 @@ class _ServiceViewState extends State<_ServiceView> {
         ),
       ),
       bottomNavigationBar: const AppBottomNav(current: AppTab.service),
+      ),
     );
   }
 }

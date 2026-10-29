@@ -12,3 +12,10 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# JVM/Kotlin crash + incremental-cache junk (added 2026-10-22 -- these piled
+# up to 230+ files and got git-added before this was in place; cleaned out
+# of the working tree the same day).
+hs_err_pid*.log
+replay_pid*.log
+.kotlin/

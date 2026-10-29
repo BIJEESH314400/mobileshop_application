@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -9,6 +10,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/exit_confirm_dialog.dart';
 import '../../product_requests/view/add_request_screen.dart';
 import '../../products/view/barcode_scanner_screen.dart';
 import '../bloc/sales_bloc.dart';
@@ -89,7 +91,19 @@ class _SalesViewState extends State<_SalesView> {
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
 
-    return BlocListener<SalesBloc, SalesState>(
+    // Sales is a navigation root reached via AppBottomNav's
+    // pushReplacement -- nothing left in the stack to pop back to.
+    // Added 2026-10-28, same reasoning/wiring as DashboardScreen.
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final shouldExit = await ExitConfirmDialog.show(context);
+        if (shouldExit == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: BlocListener<SalesBloc, SalesState>(
       // Only reacts to the false->true transition, so an unrelated
       // rebuild after the cart resets doesn't re-fire the confirmation.
       listenWhen: (previous, current) => !previous.isSuccess && current.isSuccess,
@@ -535,6 +549,7 @@ class _SalesViewState extends State<_SalesView> {
             bottomNavigationBar: const AppBottomNav(current: AppTab.sales),
           );
         },
+      ),
       ),
     );
   }

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_shop/core/constants/shop_constants.dart';
+import 'package:mobile_shop/core/models/app_user.dart';
+import 'package:mobile_shop/core/repositories/shop_details_repository.dart';
+import 'package:mobile_shop/core/theme/app_colors.dart';
+import 'package:mobile_shop/core/theme/app_palette.dart';
+import 'package:mobile_shop/core/utils/app_logger.dart';
+import 'package:mobile_shop/features/chat/view/conversation_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/constants/shop_constants.dart';
-import '../../../core/models/app_user.dart';
-import '../../../core/repositories/shop_details_repository.dart';
-import '../../../core/theme/app_colors.dart';
-import '../../../core/theme/app_palette.dart';
-import '../../../core/utils/app_logger.dart';
-import '../../chat/view/conversation_screen.dart';
 
 /// Profile -> Help Center. This app has no real support team/ticketing
 /// system behind it -- it's a private single-shop tool -- so "help"
@@ -338,7 +338,7 @@ class _ContactButton extends StatelessWidget {
           children: [
             Icon(icon, size: 18, color: AppColors.accent),
             const SizedBox(width: 10),
-            Expanded(child: Text(label, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.accent))),
+            Expanded(child: Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.accent))),
             Icon(Icons.chevron_right_rounded, size: 18, color: AppColors.accent),
           ],
         ),

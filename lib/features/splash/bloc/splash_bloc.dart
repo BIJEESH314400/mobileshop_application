@@ -36,18 +36,31 @@ class SplashBloc extends Bloc<SplashEvent, AuthStatus> {
   }
 
   Future<void> _onStarted(SplashStarted event, Emitter<AuthStatus> emit) async {
+    // Minimum time Splash stays on screen, so its animation
+    // (lib/features/splash/view/splash_screen.dart -- about 2.6s to
+    // fully play out, plus a short settled beat after) always gets to
+    // finish before navigating away. Bumped 700ms -> 3000ms, then -> 4200ms on 2026-10-28: first when
+    // the splash animation itself was made longer and more elaborate,
+    // then again to cover the new ~1.4s "hold" phase (plain static
+    // mark, matching the native pre-Flutter launch screen) plus the
+    // ~2.6s reveal that follows it, plus a short settled buffer.
+    //
+    // Started here, BEFORE the real checks below, but only awaited
+    // AFTER them -- so this timer and the real Firebase Auth/Firestore
+    // work happen concurrently, not back to back. Total wait is
+    // whichever of the two takes longer, not the sum of both: a slow
+    // network does not get a full extra 3 seconds piled on top of it,
+    // and a fast, already-cached check does not cut the animation
+    // short.
+    final minDisplay = Future.delayed(const Duration(milliseconds: 4200));
+
     // Firebase Auth already persists the signed-in session on-device by
     // itself (that's the whole point of the SDK) -- `currentUser` being
     // non-null here IS "is someone still logged in", no separate stored
-    // token/session check needed. Before this fix, this always emitted
-    // `unauthenticated` regardless -- meaning every single app launch
-    // forced a fresh username+password login even for someone who'd
-    // never signed out, which is the "burden" the shop owner flagged.
-    // The short delay below is only so the splash branding is visible
-    // for a beat -- it's not part of the check itself.
-    await Future.delayed(const Duration(milliseconds: 700));
+    // token/session check needed.
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
+      await minDisplay;
       emit(AuthStatus.unauthenticated);
       return;
     }
@@ -58,6 +71,7 @@ class SplashBloc extends Bloc<SplashEvent, AuthStatus> {
     // Splash's auto-login otherwise skips Login entirely.
     if (await _isDisabledEmployee(user.uid)) {
       await FirebaseAuth.instance.signOut();
+      await minDisplay;
       emit(AuthStatus.unauthenticated);
       return;
     }
@@ -85,12 +99,15 @@ class SplashBloc extends Bloc<SplashEvent, AuthStatus> {
     // exact same reason the read just did, stranding someone on the
     // Set-PIN screen with no way forward. Only a confirmed "no PIN
     // exists" should ever require setting one.
+    AuthStatus result;
     try {
       final hasPin = await _pinRepository.hasPin(user.uid);
-      emit(hasPin ? AuthStatus.authenticatedNeedsPin : AuthStatus.authenticatedNeedsSetPin);
+      result = hasPin ? AuthStatus.authenticatedNeedsPin : AuthStatus.authenticatedNeedsSetPin;
     } catch (e, st) {
       AppLogger.error('SplashBloc._onStarted (hasPin)', e, st);
-      emit(AuthStatus.authenticated);
+      result = AuthStatus.authenticated;
     }
+    await minDisplay;
+    emit(result);
   }
 }

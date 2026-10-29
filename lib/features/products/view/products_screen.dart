@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -8,6 +9,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/exit_confirm_dialog.dart';
 import '../../../core/widgets/confirm_delete_dialog.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import 'add_product_screen.dart';
@@ -66,7 +68,19 @@ class _ProductsViewState extends State<_ProductsView> {
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
 
-    return BlocBuilder<ProductsBloc, ProductsState>(
+    // Products is a navigation root reached via AppBottomNav's
+    // pushReplacement -- nothing left in the stack to pop back to.
+    // Added 2026-10-28, same reasoning/wiring as DashboardScreen.
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final shouldExit = await ExitConfirmDialog.show(context);
+        if (shouldExit == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: BlocBuilder<ProductsBloc, ProductsState>(
       builder: (context, state) {
         // Categories pills still come from the full unfiltered list --
         // searching shouldn't make a pill disappear out from under the
@@ -240,6 +254,7 @@ class _ProductsViewState extends State<_ProductsView> {
           bottomNavigationBar: const AppBottomNav(current: AppTab.products),
         );
       },
+      ),
     );
   }
 

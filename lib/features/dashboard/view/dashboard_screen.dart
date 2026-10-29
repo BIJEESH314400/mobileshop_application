@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -8,6 +9,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/exit_confirm_dialog.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import '../../chat/bloc/unread_summary_bloc.dart';
 import '../../chat/bloc/unread_summary_event.dart';
@@ -72,7 +74,21 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
-    return MultiBlocProvider(
+    // Dashboard/Home is a navigation root -- AppBottomNav switches
+    // tabs with pushReplacement (see its own doc comment), so there is
+    // nothing left in the stack to pop back to here. Without this,
+    // Android's back button/gesture would close the app immediately
+    // with no warning at all. Added 2026-10-28.
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final shouldExit = await ExitConfirmDialog.show(context);
+        if (shouldExit == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: MultiBlocProvider(
       providers: [
         BlocProvider(create: (_) => SalesHistoryBloc()..add(const SalesHistorySubscriptionRequested())),
         BlocProvider(create: (_) => UnreadSummaryBloc()..add(const UnreadSummarySubscriptionRequested())),
@@ -108,6 +124,7 @@ class DashboardScreen extends StatelessWidget {
           ),
         ),
         bottomNavigationBar: const AppBottomNav(current: AppTab.dashboard),
+      ),
       ),
     );
   }

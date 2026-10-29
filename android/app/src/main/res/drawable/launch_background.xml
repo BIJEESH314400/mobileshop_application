@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Native OS level launch background, shown instantly when the app
+     process starts, before the Flutter engine has loaded or rendered
+     its first frame (that is a separate, later screen:
+     lib/features/splash/view/splash_screen.dart). This was plain
+     white before, which is what showed as a brief white screen before
+     the dark splash screen appeared. Now matches that screen's dark
+     background color and shows the launcher icon centered, so the two
+     hand off without a flash. Added 2026-10-28. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <item android:drawable="@color/launch_background" />
+    <item>
         <bitmap
             android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+            android:src="@mipmap/ic_launcher" />
+    </item>
 </layer-list>

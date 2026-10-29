@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/models/app_user.dart';
@@ -7,6 +8,7 @@ import '../../../core/routes/app_routes.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
 import '../../../core/widgets/app_bottom_nav.dart';
+import '../../../core/widgets/exit_confirm_dialog.dart';
 import '../../../core/repositories/pin_repository.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../pin/view/set_pin_screen.dart';
@@ -191,7 +193,19 @@ class _ProfileViewState extends State<_ProfileView> {
       _recoveryEmailFuture = _loadRecoveryEmail();
     }
 
-    return Scaffold(
+    // Profile is a navigation root reached via AppBottomNav's
+    // pushReplacement -- nothing left in the stack to pop back to.
+    // Added 2026-10-28, same reasoning/wiring as DashboardScreen.
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final shouldExit = await ExitConfirmDialog.show(context);
+        if (shouldExit == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: p.background,
       body: SafeArea(
         child: Column(
@@ -503,6 +517,7 @@ class _ProfileViewState extends State<_ProfileView> {
         ),
       ),
       bottomNavigationBar: const AppBottomNav(current: AppTab.profile),
+      ),
     );
   }
 }
