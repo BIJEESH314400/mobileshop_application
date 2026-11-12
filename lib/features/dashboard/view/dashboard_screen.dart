@@ -578,6 +578,7 @@ class _StatGrid extends StatelessWidget {
                       labelColor: Colors.white70,
                       valueColor: Colors.white,
                       background: AppColors.accent,
+                      decorative: true,
                       trend: salesTrend,
                       trendColor: salesTrendColor,
                       showTrendIcon: showSalesTrendIcon,
@@ -636,6 +637,13 @@ class _StatCard extends StatelessWidget {
   final bool showTrendIcon;
   final IconData trendIcon;
 
+  /// True only for "Today's Sales" -- swaps the flat [background] fill
+  /// for a soft gradient (derived from it, so it still tracks whichever
+  /// accent theme is active) plus a large faint rupee-symbol watermark
+  /// in the corner, per the client's reference mockup. The other 3
+  /// stat cards stay flat.
+  final bool decorative;
+
   const _StatCard({
     required this.label,
     required this.value,
@@ -647,53 +655,103 @@ class _StatCard extends StatelessWidget {
     required this.trendColor,
     this.showTrendIcon = false,
     this.trendIcon = Icons.trending_up_rounded,
+    this.decorative = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(16),
-        border: border == null ? null : Border.all(color: border!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: labelColor)),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 350),
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: SlideTransition(
-                position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(animation),
-                child: child,
-              ),
-            ),
-            child: Text(
-              value,
-              key: ValueKey(value),
-              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: valueColor),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: labelColor)),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero).animate(animation),
+              child: child,
             ),
           ),
-          Row(
-            children: [
-              if (showTrendIcon) ...[
-                Icon(trendIcon, size: 13, color: trendColor),
-                const SizedBox(width: 4),
-              ],
-              Flexible(
+          child: Text(
+            value,
+            key: ValueKey(value),
+            style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: valueColor),
+          ),
+        ),
+        Row(
+          children: [
+            if (showTrendIcon) ...[
+              Icon(trendIcon, size: 13, color: trendColor),
+              const SizedBox(width: 4),
+            ],
+            Flexible(
+              child: Text(
+                trend,
+                style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: trendColor),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    if (!decorative) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(16),
+          border: border == null ? null : Border.all(color: border!),
+        ),
+        child: content,
+      );
+    }
+
+    // Decorative variant ("Today's Sales" only): a soft gradient
+    // derived from `background` via Color.lerp (so it stays correct
+    // whichever of the 6 accent themes is active, not hardcoded
+    // orange) plus a large, faint rotated rupee-symbol watermark
+    // bottom-right, clipped to the card's own rounded corners.
+    final gradientStart = Color.lerp(background, Colors.white, 0.18)!;
+    final gradientEnd = Color.lerp(background, Colors.black, 0.22)!;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [gradientStart, gradientEnd],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              right: -18,
+              bottom: -26,
+              child: Transform.rotate(
+                angle: -0.35,
                 child: Text(
-                  trend,
-                  style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: trendColor),
-                  overflow: TextOverflow.ellipsis,
+                  '₹',
+                  style: TextStyle(
+                    fontSize: 96,
+                    fontWeight: FontWeight.w800,
+                    height: 1,
+                    color: Colors.white.withOpacity(0.12),
+                  ),
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: content,
+            ),
+          ],
+        ),
       ),
     );
   }

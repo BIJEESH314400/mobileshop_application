@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../core/models/payment_settings.dart';
 import '../../../core/models/sale.dart';
 import '../../../core/models/shop_details.dart';
 import '../../../core/models/tax_invoice_settings.dart';
@@ -23,10 +24,11 @@ final _pdfDate = DateFormat('d MMM yyyy');
 /// Receipt bottom sheet (sales_history_screen.dart's `_showReceipt`):
 /// date, sold-by, customer link, itemized lines, subtotal/discount/
 /// tax/total, payment method.
-Future<Uint8List> buildReceiptPdfBytes(Sale sale, {ShopDetails? shop, TaxInvoiceSettings? tax}) async {
+Future<Uint8List> buildReceiptPdfBytes(Sale sale, {ShopDetails? shop, TaxInvoiceSettings? tax, PaymentSettings? payment}) async {
   final doc = pw.Document();
   final invoiceNumber = buildInvoiceNumber(sale.id, tax);
   final footerNote = buildPdfFooterNote(tax);
+  final paymentLine = buildPdfPaymentLine(payment);
 
   doc.addPage(
     pw.Page(
@@ -84,6 +86,7 @@ Future<Uint8List> buildReceiptPdfBytes(Sale sale, {ShopDetails? shop, TaxInvoice
             _pdfTotalRow('Total', sale.total, emphasize: true),
             pw.SizedBox(height: 12),
             pw.Text('Paid via ${sale.paymentMethod.toUpperCase()}', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+            if (paymentLine != null) paymentLine,
             if (footerNote != null) footerNote,
           ],
         );

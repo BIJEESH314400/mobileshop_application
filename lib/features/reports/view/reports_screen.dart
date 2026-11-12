@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
 
 import '../../../core/constants/shop_constants.dart';
 import '../../../core/models/sale.dart';
@@ -12,6 +11,7 @@ import '../../../core/repositories/tax_invoice_settings_repository.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_palette.dart';
+import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import '../bloc/reports_bloc.dart';
 import '../bloc/reports_event.dart';
@@ -71,13 +71,24 @@ class _ReportsViewState extends State<_ReportsView> {
     }).toList();
   }
 
+  // Added 2026-11-12: this used to go straight to Printing.sharePdf --
+  // now it opens PdfPreviewScreen first so the owner/employee actually
+  // sees the report before sending it anywhere. Preview's own toolbar
+  // (Share/Print icons) is what sends it from there.
   Future<void> _exportReportPdf(BuildContext context) async {
     final state = context.read<ReportsBloc>().state;
     final filtered = _filtered(state.sales);
     final periodLabel = _PeriodPills._labels[_period] ?? '';
     final (shop, tax) = await _loadReportBranding();
     final bytes = await buildReportPdfBytes(periodLabel: periodLabel, sales: filtered, shop: shop, tax: tax);
-    await Printing.sharePdf(bytes: bytes, filename: 'report-${periodLabel.toLowerCase().replaceAll(' ', '-')}.pdf');
+    if (!context.mounted) return;
+    final fileName = 'report-${periodLabel.toLowerCase().replaceAll(' ', '-')}.pdf';
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PdfPreviewScreen(title: 'Report Preview', fileName: fileName, bytes: bytes),
+      ),
+    );
   }
 
   /// Shop Details / Tax & Invoice Settings for the report masthead --

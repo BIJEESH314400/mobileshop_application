@@ -4,23 +4,26 @@ import '../routes/app_routes.dart';
 import '../theme/app_colors.dart';
 
 /// The 5-tab bottom bar shared by Dashboard, Sales, Service, Products
-/// and Profile — a floating rounded pill with 5 equal-weight tabs.
-/// Home used to be a separate raised circular button above the bar;
-/// redesigned so all 5 tabs sit flat in one row, and whichever one is
-/// active gets a soft rounded-chip highlight instead.
+/// and Profile — a floating rounded pill with 4 flat tabs (Service,
+/// Sales, Products, Profile) plus a raised circular Home button
+/// poking up out of the middle, matching the client's reference
+/// mockups. Whichever flat tab is active gets a soft rounded-chip
+/// highlight; Home instead glows brighter while active, since it's
+/// always filled solid rather than flat.
 ///
 /// Drop this into any of those screens' Scaffold as
 /// `bottomNavigationBar: AppBottomNav(current: AppTab.dashboard)`.
 ///
-/// Tap feedback: intentionally NONE — see the git history on this file
-/// for why (Material's default ripple and an AnimatedScale press both
-/// read as an unwanted "vibrate"). Tapping a tab just changes screens;
-/// the only visual feedback is the resulting active-chip appearing.
+/// Tap feedback: intentionally NONE on the flat tabs — see the git
+/// history on this file for why (Material's default ripple and an
+/// AnimatedScale press both read as an unwanted "vibrate"). Tapping a
+/// tab just changes screens; the only visual feedback is the
+/// resulting active-chip (or, for Home, brighter glow) appearing.
 ///
 /// Theme: reads `Theme.of(context).brightness` and switches its own
-/// palette between AppColors' light/dark constants. The app itself
-/// only has a light ThemeData today — the dark branch is ready and
-/// waiting for the app-wide dark theme to land.
+/// palette between AppColors' light/dark constants — this already
+/// works today, since dark mode is wired app-wide via ThemeBloc
+/// (see app.dart / app_theme.dart).
 enum AppTab { dashboard, sales, service, products, profile }
 
 class AppBottomNav extends StatelessWidget {
@@ -40,8 +43,16 @@ class AppBottomNav extends StatelessWidget {
     final barColor = isDark ? AppColors.darkCard : AppColors.card;
     final borderColor = isDark ? AppColors.darkBorder : AppColors.border;
     final inactiveColor = isDark ? AppColors.darkTextSecondary : AppColors.textSecondary;
-    final activeColor = isDark ? AppColors.activeDark : AppColors.accent;
-    final activeBg = isDark ? AppColors.activeDark.withOpacity(0.16) : AppColors.iconTint;
+    // The Home button + active-tab highlight both use the user's
+    // selected accent color in light AND dark mode (2026-10-29) --
+    // this used to fall back to a fixed cyan in dark mode
+    // (AppColors.activeDark), which silently ignored whichever of the
+    // 6 themes was picked in Profile > App Theme. The rest of the
+    // app's dark theme (app_theme.dart's buildAppDarkTheme) already
+    // seeds its ColorScheme from AppColors.accent, so this brings the
+    // bottom bar in line with that.
+    final activeColor = AppColors.accent;
+    final activeBg = isDark ? AppColors.accent.withOpacity(0.16) : AppColors.iconTint;
 
     // Android 15 (targeting SDK 35) stopped automatically reserving
     // space for the gesture-navigation bar/pill -- content now draws
@@ -55,70 +66,80 @@ class AppBottomNav extends StatelessWidget {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + bottomInset),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: barColor,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.5 : 0.08),
-              blurRadius: 20,
-              offset: const Offset(0, 6),
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: barColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: borderColor),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDark ? 0.5 : 0.08),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            _NavItem(
-              icon: Icons.handyman_rounded,
-              label: 'Service',
-              isActive: current == AppTab.service,
-              activeColor: activeColor,
-              inactiveColor: inactiveColor,
-              activeBg: activeBg,
-              onTap: () => _go(context, AppRoutes.service),
+            child: Row(
+              children: [
+                _NavItem(
+                  icon: Icons.handyman_rounded,
+                  label: 'Service',
+                  isActive: current == AppTab.service,
+                  activeColor: activeColor,
+                  inactiveColor: inactiveColor,
+                  activeBg: activeBg,
+                  onTap: () => _go(context, AppRoutes.service),
+                ),
+                _NavItem(
+                  icon: Icons.trending_up_rounded,
+                  label: 'Sales',
+                  isActive: current == AppTab.sales,
+                  activeColor: activeColor,
+                  inactiveColor: inactiveColor,
+                  activeBg: activeBg,
+                  badgeCount: salesBadgeCount,
+                  onTap: () => _go(context, AppRoutes.sales),
+                ),
+                // Home used to be a flat _NavItem here; it's now the
+                // raised circular button floating above the bar (built
+                // below), so this slot is just an empty spacer that
+                // keeps the other 4 tabs evenly spaced either side of it.
+                const Expanded(child: SizedBox.shrink()),
+                _NavItem(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Products',
+                  isActive: current == AppTab.products,
+                  activeColor: activeColor,
+                  inactiveColor: inactiveColor,
+                  activeBg: activeBg,
+                  onTap: () => _go(context, AppRoutes.products),
+                ),
+                _NavItem(
+                  icon: Icons.manage_accounts_rounded,
+                  label: 'Profile',
+                  isActive: current == AppTab.profile,
+                  activeColor: activeColor,
+                  inactiveColor: inactiveColor,
+                  activeBg: activeBg,
+                  onTap: () => _go(context, AppRoutes.profile),
+                ),
+              ],
             ),
-            _NavItem(
-              icon: Icons.trending_up_rounded,
-              label: 'Sales',
-              isActive: current == AppTab.sales,
-              activeColor: activeColor,
-              inactiveColor: inactiveColor,
-              activeBg: activeBg,
-              badgeCount: salesBadgeCount,
-              onTap: () => _go(context, AppRoutes.sales),
-            ),
-            _NavItem(
-              icon: Icons.home_rounded,
-              label: 'Home',
+          ),
+          Positioned(
+            top: -14,
+            child: _HomeButton(
               isActive: current == AppTab.dashboard,
               activeColor: activeColor,
-              inactiveColor: inactiveColor,
-              activeBg: activeBg,
               onTap: () => _go(context, AppRoutes.dashboard),
             ),
-            _NavItem(
-              icon: Icons.inventory_2_outlined,
-              label: 'Products',
-              isActive: current == AppTab.products,
-              activeColor: activeColor,
-              inactiveColor: inactiveColor,
-              activeBg: activeBg,
-              onTap: () => _go(context, AppRoutes.products),
-            ),
-            _NavItem(
-              icon: Icons.manage_accounts_rounded,
-              label: 'Profile',
-              isActive: current == AppTab.profile,
-              activeColor: activeColor,
-              inactiveColor: inactiveColor,
-              activeBg: activeBg,
-              onTap: () => _go(context, AppRoutes.profile),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -139,6 +160,52 @@ class AppBottomNav extends StatelessWidget {
         transitionDuration: Duration.zero,
         reverseTransitionDuration: Duration.zero,
         pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+      ),
+    );
+  }
+}
+
+class _HomeButton extends StatelessWidget {
+  final bool isActive;
+  final Color activeColor;
+  final VoidCallback onTap;
+
+  const _HomeButton({
+    required this.isActive,
+    required this.activeColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // No halo ring around this one (2026-10-29) -- an earlier version
+    // wrapped it in a page-background-colored ring, which read as a
+    // fully detached floating button with a visible gap under it.
+    // The client's reference has Home sitting almost flush with the
+    // bar, just bumping up out of it slightly -- achieved here with a
+    // smaller circle (52px, was 60px) and a shallower poke (the
+    // Positioned top offset above was taken from -22 to -14), so most
+    // of the circle overlaps the bar itself instead of floating clear
+    // above it.
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: activeColor,
+          boxShadow: [
+            BoxShadow(
+              color: activeColor.withOpacity(isActive ? 0.5 : 0.3),
+              blurRadius: isActive ? 16 : 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.home_rounded, color: Colors.white, size: 24),
       ),
     );
   }

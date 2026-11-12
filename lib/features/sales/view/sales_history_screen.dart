@@ -6,10 +6,12 @@ import 'package:intl/intl.dart';
 import 'package:printing/printing.dart';
 
 import '../../../core/constants/shop_constants.dart';
+import '../../../core/models/payment_settings.dart';
 import '../../../core/models/sale.dart';
 import '../../../core/models/shop_details.dart';
 import '../../../core/models/tax_invoice_settings.dart';
 import '../../../core/repositories/customer_repository.dart';
+import '../../../core/repositories/payment_settings_repository.dart';
 import '../../../core/repositories/sale_repository.dart';
 import '../../../core/repositories/shop_details_repository.dart';
 import '../../../core/repositories/tax_invoice_settings_repository.dart';
@@ -18,6 +20,7 @@ import '../../../core/theme/app_palette.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/services/bluetooth_printer_service.dart';
 import '../../../core/services/printer_prefs.dart';
+import '../../../core/widgets/pdf_preview_screen.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import 'customer_picker_sheet.dart';
 import 'date_range_filter_sheet.dart';
@@ -77,15 +80,20 @@ void _comingSoon(BuildContext context, String label) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label — coming soon')));
 }
 
-/// Shop Details / Tax & Invoice Settings for the receipt/report
-/// masthead -- best-effort, fails open to `null` (the old hardcoded
-/// "4B Mobiles", no GSTIN/invoice-number/footer) on any error, same
-/// as every other non-security read in this app (e.g.
-/// `SalesBloc`'s own tax-rate read). A printed receipt should never
-/// crash or be blocked over a branding line.
-Future<(ShopDetails?, TaxInvoiceSettings?)> _loadReceiptBranding() async {
+/// Shop Details / Tax & Invoice Settings / Payment Settings for the
+/// receipt/report masthead -- best-effort, fails open to `null` (the
+/// old hardcoded "4B Mobiles", no GSTIN/invoice-number/footer/UPI
+/// line) on any error, same as every other non-security read in this
+/// app (e.g. `SalesBloc`'s own tax-rate read). A printed receipt
+/// should never crash or be blocked over a branding line. Payment
+/// Settings was added 2026-11-09 for the UPI payment line -- only the
+/// two receipt call sites below actually use it; `_exportSalesPdf`
+/// (the Sales List report) discards it, since that line is scoped to
+/// the sale receipt only.
+Future<(ShopDetails?, TaxInvoiceSettings?, PaymentSettings?)> _loadReceiptBranding() async {
   ShopDetails? shop;
   TaxInvoiceSettings? tax;
+  PaymentSettings? payment;
   try {
     shop = await ShopDetailsRepository().getShopDetails(currentShopId);
   } catch (e, st) {
@@ -96,56 +104,200 @@ Future<(ShopDetails?, TaxInvoiceSettings?)> _loadReceiptBranding() async {
   } catch (e, st) {
     AppLogger.error('ReceiptBranding.tax', e, st);
   }
-  return (shop, tax);
+  try {
+    payment = await PaymentSettingsRepository().getPaymentSettings(currentShopId);
+  } catch (e, st) {
+    AppLogger.error('ReceiptBranding.payment', e, st);
+  }
+  return (shop, tax, payment);
 }
 
+// Added 2026-11-12: this used to go straight to Printing.sharePdf --
+// now it opens PdfPreviewScreen first so the receipt is actually seen
+// before it's sent anywhere. Preview's own toolbar (Share/Print icons)
+// is what sends it from there.
 Future<void> _shareReceiptPdf(BuildContext context, Sale sale) async {
-  final (shop, tax) = await _loadReceiptBranding();
-  final bytes = await buildReceiptPdfBytes(sale, shop: shop, tax: tax);
-  await Printing.sharePdf(bytes: bytes, filename: 'receipt-${sale.id}.pdf');
+  final (shop, tax, payment) = await _loadReceiptBranding();
+  final bytes = await buildReceiptPdfBytes(sale, shop: shop, tax: tax, payment: payment);
+  if (!context.mounted) return;
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => PdfPreviewScreen(title: 'Receipt Preview', fileName: 'receipt-${sale.id}.pdf', bytes: bytes),
+    ),
+  );
 }
 
 /// Prints [sale] to whichever Bluetooth thermal printer this phone has
-/// selected (Profile -> Printer Settings, owner-only). Deliberately
-/// separate from the PDF share button above -- most cheap Bluetooth
-/// receipt printers (Visiontek included) don't register as an Android
-/// system print service, so they're never reachable through the PDF
-/// share sheet's own "Print" option; this talks to the printer
-/// directly over a raw Bluetooth socket instead.
-Future<void> _printReceiptBluetooth(BuildContext context, Sale sale) async {
-  final address = await PrinterPrefs.getSelectedPrinterAddress();
-  if (address == null) {
+/// selected (Profile -> Printer Settings, owner-only, or picked on the
+/// spot below). Deliberately separate from the PDF share button above
+/// -- most cheap Bluetooth receipt printers (Visiontek included) don't
+/// register as an Android system print service, so they're never
+/// reachable through the PDF share sheet's own "Print" option; this
+/// talks to the printer directly over a raw Bluetooth socket instead.
+///
+/// Feedback goes through [onStatus] (2026-11-09 fix) instead of a
+/// page-level SnackBar -- this is always called from the Receipt
+/// bottom sheet, and a SnackBar shown while that sheet is open renders
+/// UNDER it (a known Flutter gotcha), so it was invisible the whole
+/// time: tapping Print looked like it did nothing at all, even on the
+/// "no printer selected" case. [onStatus] drives inline text inside
+/// the sheet itself instead, which is actually visible. Falls back to
+/// a SnackBar if no [onStatus] is given, so this still degrades
+/// sensibly if ever called from somewhere without that inline slot.
+Future<void> _printReceiptBluetooth(
+  BuildContext context,
+  Sale sale, {
+  void Function(String message)? onStatus,
+}) async {
+  void status(String message) {
+    if (onStatus != null) {
+      onStatus(message);
+      return;
+    }
     if (!context.mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('No printer selected -- set one in Profile → Printer Settings')));
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  final supported = await BluetoothPrinterService.instance.isBluetoothSupported();
+  if (!supported) {
+    status('This phone has no Bluetooth hardware');
     return;
   }
   final granted = await BluetoothPrinterService.instance.ensurePermission();
   if (!granted) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(const SnackBar(content: Text('Bluetooth permission is needed to print')));
+    status('Bluetooth permission is needed to print');
     return;
   }
-  if (!context.mounted) return;
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(const SnackBar(content: Text('Printing…')));
-  final (shop, tax) = await _loadReceiptBranding();
-  final bytes = buildReceiptEscPosBytes(sale, shop: shop, tax: tax);
+  // Added 2026-11-09 -- this was never actually checked before, so a
+  // print attempt with Bluetooth switched off just failed silently
+  // deep inside printBytes with no way for the owner to act on it.
+  final enabled = await BluetoothPrinterService.instance.isBluetoothEnabled();
+  if (!enabled) {
+    status('Bluetooth is off');
+    if (!context.mounted) return;
+    await _showEnableBluetoothDialog(context);
+    return;
+  }
+  // Added 2026-11-09 -- picks a printer right here instead of a
+  // dead-end message pointing to Profile -> Printer Settings.
+  var address = await PrinterPrefs.getSelectedPrinterAddress();
+  if (address == null) {
+    status('Select a printer');
+    if (!context.mounted) return;
+    address = await _pickPrinterDialog(context);
+    if (!context.mounted) return;
+    if (address == null) {
+      status('No printer selected');
+      return;
+    }
+  }
+  status('Printing…');
+  final (shop, tax, payment) = await _loadReceiptBranding();
+  final bytes = buildReceiptEscPosBytes(sale, shop: shop, tax: tax, payment: payment);
   final outcome = await BluetoothPrinterService.instance.printBytes(address: address, bytes: bytes);
-  if (!context.mounted) return;
   final message = switch (outcome) {
     PrintOutcome.success => 'Receipt sent to printer',
     PrintOutcome.permissionDenied => 'Bluetooth permission is needed to print',
     PrintOutcome.connectFailed => "Couldn't connect — check the printer is on and in range",
     _ => "Couldn't print — try again",
   };
-  ScaffoldMessenger.of(context)
-    ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message)));
+  status(message);
+}
+
+/// Shown when Bluetooth itself is off (2026-11-09). Android has no
+/// reliable "just turn it on for me, no extra screen" API any more --
+/// the old ACTION_REQUEST_ENABLE result-callback path needs the whole
+/// plugin to become ActivityAware and track request codes, a lot of
+/// native plumbing for this one dialog -- so this gets the owner to
+/// the system Bluetooth toggle and asks them to tap Print again once
+/// it's on, rather than silently doing nothing.
+Future<void> _showEnableBluetoothDialog(BuildContext context) {
+  return showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Bluetooth is off'),
+      content: const Text('Turn on Bluetooth to print the receipt, then tap the print icon again.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () {
+            BluetoothPrinterService.instance.openBluetoothSettings();
+            Navigator.of(ctx).pop();
+          },
+          child: const Text('Open Bluetooth Settings'),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Shown when no printer has been selected yet (2026-11-09) -- lets
+/// the owner pick one of this phone's already-*paired* Bluetooth
+/// devices right here, instead of a dead end pointing them to Profile
+/// -> Printer Settings. Still paired devices only, same as that screen
+/// -- there's no live scan for unpaired nearby printers here (that
+/// needs the BLUETOOTH_SCAN permission plus a whole discovery flow, a
+/// bigger separate feature); pairing a brand-new printer still happens
+/// in the phone's own Bluetooth settings first, which "Pair a new
+/// printer" below jumps straight to.
+Future<String?> _pickPrinterDialog(BuildContext context) async {
+  final devices = await BluetoothPrinterService.instance.listBondedDevices();
+  if (!context.mounted) return null;
+  return showDialog<String>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: const Text('Select a printer'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: devices.isEmpty
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('No paired Bluetooth printers found on this phone.'),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () {
+                        BluetoothPrinterService.instance.openBluetoothSettings();
+                        Navigator.of(ctx).pop();
+                      },
+                      child: const Text('Pair a new printer'),
+                    ),
+                  ],
+                )
+              : ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final device in devices)
+                      ListTile(
+                        leading: const Icon(Icons.bluetooth_rounded),
+                        title: Text(device.name),
+                        subtitle: Text(device.address),
+                        onTap: () async {
+                          await PrinterPrefs.setSelectedPrinter(address: device.address, name: device.name);
+                          if (ctx.mounted) Navigator.of(ctx).pop(device.address);
+                        },
+                      ),
+                    TextButton(
+                      onPressed: () {
+                        BluetoothPrinterService.instance.openBluetoothSettings();
+                        Navigator.of(ctx).pop();
+                      },
+                      child: const Text('Pair a new printer'),
+                    ),
+                  ],
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+        ],
+      );
+    },
+  );
 }
 
 /// Revenue trend over the trailing 7 days vs. the 7 days before that --
@@ -295,7 +447,8 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
                 _Header(
                   palette: p,
                   updatedText: _relativeUpdated(state.lastUpdatedAt),
-                  onExport: () => _exportSalesPdf(context, _filtered(state.sales)),
+                  isExporting: _exporting,
+                  onExport: _exporting ? null : () => _exportSalesPdf(context, _filtered(state.sales)),
                 ),
                 Expanded(child: _buildBody(context, p, state)),
               ],
@@ -306,16 +459,29 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
     );
   }
 
+  // Guards against double-tap (2026-11-09): a quick double tap on the
+  // header's export icon used to fire this twice concurrently, building
+  // the PDF twice and briefly stacking two share sheets on top of each
+  // other. onExport above is already null while _exporting is true, so
+  // this early return is just the belt-and-suspenders second guard.
+  bool _exporting = false;
+
   Future<void> _exportSalesPdf(BuildContext context, List<Sale> sales) async {
-    final (shop, tax) = await _loadReceiptBranding();
-    final bytes = await buildSalesListPdfBytes(
-      sales,
-      dateRange: _dateRange,
-      searchQuery: _searchCtrl.text,
-      shop: shop,
-      tax: tax,
-    );
-    await Printing.sharePdf(bytes: bytes, filename: 'sales-history.pdf');
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final (shop, tax, _) = await _loadReceiptBranding();
+      final bytes = await buildSalesListPdfBytes(
+        sales,
+        dateRange: _dateRange,
+        searchQuery: _searchCtrl.text,
+        shop: shop,
+        tax: tax,
+      );
+      await Printing.sharePdf(bytes: bytes, filename: 'sales-history.pdf');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
   }
 
   Widget _buildBody(BuildContext context, AppPalette p, SalesHistoryState state) {
@@ -408,8 +574,9 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
 class _Header extends StatelessWidget {
   final AppPalette palette;
   final String updatedText;
-  final VoidCallback onExport;
-  const _Header({required this.palette, required this.updatedText, required this.onExport});
+  final bool isExporting;
+  final VoidCallback? onExport;
+  const _Header({required this.palette, required this.updatedText, required this.onExport, this.isExporting = false});
 
   @override
   Widget build(BuildContext context) {
@@ -459,7 +626,15 @@ class _Header extends StatelessWidget {
                 borderRadius: BorderRadius.circular(11),
                 border: Border.all(color: palette.border),
               ),
-              child: Icon(Icons.download_rounded, size: 18, color: palette.textPrimary),
+              child: Center(
+                child: isExporting
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(palette.textPrimary)),
+                      )
+                    : Icon(Icons.download_rounded, size: 18, color: palette.textPrimary),
+              ),
             ),
           ),
         ],
@@ -1099,83 +1274,143 @@ void _showReceipt(BuildContext context, Sale sale, AppPalette palette) {
     backgroundColor: palette.card,
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
     builder: (context) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+      // Guards against double-tap (2026-11-09): a quick double tap on
+      // Print/Share used to fire _printReceiptBluetooth/_shareReceiptPdf
+      // twice concurrently -- two Bluetooth connect attempts racing, or
+      // two PDF share sheets stacked on top of each other. `busy` and
+      // `busyAction` are captured by this closure and survive rebuilds
+      // from setSheetState below, since the StatefulBuilder they belong
+      // to persists for the life of this bottom sheet.
+      bool busy = false;
+      String? busyAction;
+      String? statusText;
+      return StatefulBuilder(
+        builder: (context, setSheetState) {
+          Future<void> runAction(String action, Future<void> Function() action0) async {
+            if (busy) return;
+            setSheetState(() {
+              busy = true;
+              busyAction = action;
+            });
+            try {
+              await action0();
+            } finally {
+              setSheetState(() {
+                busy = false;
+                busyAction = null;
+              });
+            }
+          }
+
+          Widget actionIcon(String action, IconData icon) {
+            if (busyAction == action) {
+              return SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AppColors.accent)),
+              );
+            }
+            return Icon(icon, size: 19, color: busy ? palette.textSecondary.withOpacity(0.4) : palette.textSecondary);
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text('Receipt', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: palette.textPrimary)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('Receipt', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: palette.textPrimary)),
+                      ),
+                      GestureDetector(
+                        onTap: busy
+                            ? null
+                            : () => runAction(
+                                  'print',
+                                  () => _printReceiptBluetooth(
+                                    context,
+                                    sale,
+                                    onStatus: (message) => setSheetState(() => statusText = message),
+                                  ),
+                                ),
+                        child: Padding(
+                          padding: const EdgeInsets.only(right: 16),
+                          child: SizedBox(width: 19, height: 19, child: Center(child: actionIcon('print', Icons.print_outlined))),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: busy ? null : () => runAction('share', () => _shareReceiptPdf(context, sale)),
+                        child: SizedBox(width: 19, height: 19, child: Center(child: actionIcon('share', Icons.ios_share_rounded))),
+                      ),
+                    ],
                   ),
-                  GestureDetector(
-                    onTap: () => _printReceiptBluetooth(context, sale),
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 16),
-                      child: Icon(Icons.print_outlined, size: 19, color: palette.textSecondary),
+                  // Inline status for the Print (Bluetooth) action, added
+                  // 2026-11-09 -- a SnackBar shown while this bottom sheet
+                  // is open renders underneath it and is never actually
+                  // seen, which is why tapping Print used to look like it
+                  // did nothing at all (including the "no printer
+                  // selected" message). This line is always visible.
+                  if (statusText != null) ...[
+                    const SizedBox(height: 6),
+                    Text(statusText!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                  ],
+                  const SizedBox(height: 2),
+                  Text(
+                    sale.createdAt == null ? 'Just now' : _dateFormat.format(sale.createdAt!),
+                    style: TextStyle(fontSize: 12.5, color: palette.textSecondary),
+                  ),
+                  if (sale.soldByName.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text.rich(
+                      TextSpan(
+                        style: TextStyle(fontSize: 12.5, color: palette.textSecondary),
+                        children: [
+                          const TextSpan(text: 'Sold by '),
+                          TextSpan(
+                            text: '${sale.soldByName}${sale.soldByRole == 'owner' ? ' (Owner)' : ' (Staff)'}',
+                            style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: () => _shareReceiptPdf(context, sale),
-                    child: Icon(Icons.ios_share_rounded, size: 19, color: palette.textSecondary),
+                  ],
+                  const SizedBox(height: 2),
+                  _CustomerLinkRow(palette: palette, sale: sale),
+                  const SizedBox(height: 14),
+                  for (final item in sale.items)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${item.name} ×${item.qty}',
+                              style: TextStyle(fontSize: 13.5, color: palette.textPrimary),
+                            ),
+                          ),
+                          Text(_priceFormat.format(item.lineTotal), style: TextStyle(fontSize: 13.5, color: palette.textPrimary)),
+                        ],
+                      ),
+                    ),
+                  Divider(color: palette.divider, height: 24),
+                  _ReceiptTotalRow(label: 'Subtotal', value: sale.subtotal, palette: palette),
+                  if (sale.discount > 0) _ReceiptTotalRow(label: 'Discount', value: -sale.discount, palette: palette),
+                  _ReceiptTotalRow(label: 'Tax', value: sale.tax, palette: palette),
+                  const SizedBox(height: 4),
+                  _ReceiptTotalRow(label: 'Total', value: sale.total, palette: palette, emphasize: true),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Paid via ${sale.paymentMethod.toUpperCase()}',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: palette.textSecondary),
                   ),
                 ],
               ),
-              const SizedBox(height: 2),
-              Text(
-                sale.createdAt == null ? 'Just now' : _dateFormat.format(sale.createdAt!),
-                style: TextStyle(fontSize: 12.5, color: palette.textSecondary),
-              ),
-              if (sale.soldByName.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text.rich(
-                  TextSpan(
-                    style: TextStyle(fontSize: 12.5, color: palette.textSecondary),
-                    children: [
-                      const TextSpan(text: 'Sold by '),
-                      TextSpan(
-                        text: '${sale.soldByName}${sale.soldByRole == 'owner' ? ' (Owner)' : ' (Staff)'}',
-                        style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 2),
-              _CustomerLinkRow(palette: palette, sale: sale),
-              const SizedBox(height: 14),
-              for (final item in sale.items)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${item.name} ×${item.qty}',
-                          style: TextStyle(fontSize: 13.5, color: palette.textPrimary),
-                        ),
-                      ),
-                      Text(_priceFormat.format(item.lineTotal), style: TextStyle(fontSize: 13.5, color: palette.textPrimary)),
-                    ],
-                  ),
-                ),
-              Divider(color: palette.divider, height: 24),
-              _ReceiptTotalRow(label: 'Subtotal', value: sale.subtotal, palette: palette),
-              if (sale.discount > 0) _ReceiptTotalRow(label: 'Discount', value: -sale.discount, palette: palette),
-              _ReceiptTotalRow(label: 'Tax', value: sale.tax, palette: palette),
-              const SizedBox(height: 4),
-              _ReceiptTotalRow(label: 'Total', value: sale.total, palette: palette, emphasize: true),
-              const SizedBox(height: 4),
-              Text(
-                'Paid via ${sale.paymentMethod.toUpperCase()}',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: palette.textSecondary),
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       );
     },
   );

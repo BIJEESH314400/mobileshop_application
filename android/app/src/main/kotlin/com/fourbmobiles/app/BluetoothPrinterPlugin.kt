@@ -1,9 +1,13 @@
 package com.fourbmobiles.app
 
+import android.app.Activity
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodCall
 import java.io.IOException
@@ -42,7 +46,7 @@ import java.util.UUID
  *   can block for several seconds, and doing that on the main thread
  *   would freeze the whole app's UI.
  */
-class BluetoothPrinterPlugin : MethodChannel.MethodCallHandler {
+class BluetoothPrinterPlugin(private val activity: Activity) : MethodChannel.MethodCallHandler {
 
     companion object {
         const val CHANNEL = "com.fourbmobiles.app/printer"
@@ -59,6 +63,7 @@ class BluetoothPrinterPlugin : MethodChannel.MethodCallHandler {
             "isBluetoothSupported" -> result.success(BluetoothAdapter.getDefaultAdapter() != null)
             "isBluetoothEnabled" -> result.success(BluetoothAdapter.getDefaultAdapter()?.isEnabled == true)
             "listBondedDevices" -> listBondedDevices(result)
+            "openBluetoothSettings" -> openBluetoothSettings(result)
             "printBytes" -> {
                 val address = call.argument<String>("address")
                 val bytes = call.argument<ByteArray>("bytes")
@@ -69,6 +74,22 @@ class BluetoothPrinterPlugin : MethodChannel.MethodCallHandler {
                 printBytes(address, bytes, result)
             }
             else -> result.notImplemented()
+        }
+    }
+
+    // Jumps straight to the phone's own system Bluetooth toggle/pairing
+    // screen -- added 2026-11-09 so the receipt Print flow can send the
+    // owner there directly (Bluetooth off, or no printer paired yet)
+    // instead of a dead-end "go turn it on yourself" message with no
+    // way to act on it from inside the app.
+    private fun openBluetoothSettings(result: MethodChannel.Result) {
+        try {
+            val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            activity.startActivity(intent)
+            result.success(true)
+        } catch (e: Exception) {
+            result.error("ERROR", e.message, null)
         }
     }
 
@@ -100,8 +121,7 @@ class BluetoothPrinterPlugin : MethodChannel.MethodCallHandler {
                 // Cancel any in-progress discovery first -- discovery running at the
                 // same time significantly slows down (or can fail) an RFCOMM connect.
                 adapter.cancelDiscovery()
-                socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
-                socket.connect()
+                socket = connectSocket(device)
                 val out: OutputStream = socket.outputStream
                 out.write(bytes)
                 out.flush()
@@ -122,5 +142,50 @@ class BluetoothPrinterPlugin : MethodChannel.MethodCallHandler {
                 }
             }
         }.start()
+    }
+
+    /**
+     * Connects to [device] over classic Bluetooth SPP -- tries the
+     * normal SDP-based socket first, and if that connect() fails,
+     * falls back to RFCOMM channel 1 directly via reflection.
+     *
+     * Added 2026-11-09 after a real-device failure: connect() on the
+     * SDP-based socket (createRfcommSocketToServiceRecord) threw
+     * "read failed, socket might closed or timeout, read ret: -1" --
+     * a well-known failure on Android's Bluetooth stack when a cheap
+     * thermal printer's firmware doesn't answer the SDP service query
+     * properly (very common on ESC/POS printers, Visiontek included --
+     * they're not full Bluetooth stacks, just enough firmware to
+     * accept a raw RFCOMM connection). Every printer of this kind
+     * listens on RFCOMM channel 1 regardless of SDP, so bypassing SDP
+     * and connecting to that channel directly is the standard
+     * workaround other Android ESC/POS printer libraries use for this
+     * exact error.
+     */
+    private fun connectSocket(device: BluetoothDevice): BluetoothSocket {
+        try {
+            val socket = device.createRfcommSocketToServiceRecord(SPP_UUID)
+            socket.connect()
+            return socket
+        } catch (sdpFailure: IOException) {
+            try {
+                val fallback = createChannelSocket(device, 1)
+                fallback.connect()
+                return fallback
+            } catch (channelFailure: Exception) {
+                // The SDP-path failure is usually the more informative
+                // one to surface, unless the fallback hit something
+                // worth reporting on its own.
+                throw if (channelFailure is IOException) channelFailure else sdpFailure
+            }
+        }
+    }
+
+    // Hidden-but-stable API every classic-Bluetooth device exposes --
+    // BluetoothDevice.createRfcommSocket(int channel), not part of the
+    // public SDK because it skips the SDP lookup entirely.
+    private fun createChannelSocket(device: BluetoothDevice, channel: Int): BluetoothSocket {
+        val method = device.javaClass.getMethod("createRfcommSocket", Int::class.javaPrimitiveType)
+        return method.invoke(device, channel) as BluetoothSocket
     }
 }

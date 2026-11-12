@@ -59,6 +59,21 @@ class BluetoothPrinterService {
     }
   }
 
+  /// Jumps straight to the phone's own system Bluetooth settings
+  /// screen (toggle Bluetooth on/off, pair a new device) -- added
+  /// 2026-11-09 for the receipt Print flow, so "Bluetooth is off" or
+  /// "no printer paired yet" has somewhere to actually send the owner,
+  /// instead of just telling them to go find it themselves. Fire and
+  /// forget -- there's no result to wait on, the owner has to come
+  /// back and tap Print again once they're done.
+  Future<void> openBluetoothSettings() async {
+    try {
+      await _channel.invokeMethod<bool>('openBluetoothSettings');
+    } catch (e, st) {
+      AppLogger.error('BluetoothPrinterService.openBluetoothSettings', e, st);
+    }
+  }
+
   /// Every Bluetooth device already paired with this phone (via the
   /// phone's own system Bluetooth settings) -- not filtered down to
   /// "looks like a printer" in any way, since there's no reliable way

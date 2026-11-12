@@ -1,6 +1,7 @@
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../models/payment_settings.dart';
 import '../models/shop_details.dart';
 import '../models/tax_invoice_settings.dart';
 
@@ -13,6 +14,12 @@ import '../models/tax_invoice_settings.dart';
 /// falls back to the old hardcoded behaviour when [shop]/[tax] are
 /// null or were never filled in, so a shop that hasn't visited those
 /// two settings screens yet sees no regression.
+///
+/// [upiPaymentLine]/[buildPdfPaymentLine] (added 2026-11-09) are the
+/// one exception -- scoped to the sale receipt only (PDF + Bluetooth),
+/// not the Sales/Reports PDFs, and to just the UPI id, not the full
+/// bank account details Payment Settings can also hold -- per the
+/// user's own choice when this was scoped.
 const _fallbackShopName = '4B Mobiles';
 
 /// The shop's real name if Shop Details has one saved, else the old
@@ -43,6 +50,25 @@ String? buildInvoiceNumber(String saleId, TaxInvoiceSettings? tax) {
   if (prefix.isEmpty) return null;
   final shortId = saleId.length > 6 ? saleId.substring(saleId.length - 6) : saleId;
   return '$prefix${shortId.toUpperCase()}';
+}
+
+/// The shop's UPI payment line ("Pay via UPI: upi_id"), or null if no
+/// UPI id has been saved in Payment Settings.
+String? upiPaymentLine(PaymentSettings? payment) {
+  final upiId = payment?.upiId.trim() ?? '';
+  if (upiId.isEmpty) return null;
+  return 'Pay via UPI: $upiId';
+}
+
+/// The PDF version of [upiPaymentLine] -- null (render nothing) if no
+/// UPI id was ever saved.
+pw.Widget? buildPdfPaymentLine(PaymentSettings? payment) {
+  final line = upiPaymentLine(payment);
+  if (line == null) return null;
+  return pw.Padding(
+    padding: const pw.EdgeInsets.only(top: 6),
+    child: pw.Text(line, style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+  );
 }
 
 /// The PDF masthead column shown at the top of the first page of

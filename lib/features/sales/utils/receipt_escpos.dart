@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:intl/intl.dart';
 
+import '../../../core/models/payment_settings.dart';
 import '../../../core/models/sale.dart';
 import '../../../core/models/shop_details.dart';
 import '../../../core/models/tax_invoice_settings.dart';
@@ -18,7 +19,7 @@ import '../../../core/utils/receipt_branding.dart';
 /// 2-inch/58mm thermal roll (most small Bluetooth receipt printers,
 /// Visiontek included). A 3-inch/80mm printer fits more (around 42-48)
 /// -- change this if a wider printer is confirmed on real hardware.
-Uint8List buildReceiptEscPosBytes(Sale sale, {int charsPerLine = 32, ShopDetails? shop, TaxInvoiceSettings? tax}) {
+Uint8List buildReceiptEscPosBytes(Sale sale, {int charsPerLine = 32, ShopDetails? shop, TaxInvoiceSettings? tax, PaymentSettings? payment}) {
   final dateFormat = DateFormat('d MMM yyyy, h:mm a');
   final money = NumberFormat.currency(locale: 'en_IN', symbol: 'Rs. ', decimalDigits: 2);
 
@@ -26,6 +27,7 @@ Uint8List buildReceiptEscPosBytes(Sale sale, {int charsPerLine = 32, ShopDetails
   final gstin = tax?.gstin.trim() ?? '';
   final invoiceNumber = buildInvoiceNumber(sale.id, tax);
   final footerNote = tax?.invoiceNote.trim() ?? '';
+  final upiLine = upiPaymentLine(payment);
 
   final b = EscPosBuilder()
     ..text(shopDisplayName(shop), bold: true, doubleWidth: true, center: true)
@@ -74,6 +76,9 @@ Uint8List buildReceiptEscPosBytes(Sale sale, {int charsPerLine = 32, ShopDetails
   b.line();
   b.text('Paid via ${sale.paymentMethod.toUpperCase()}', bold: true);
   b.line();
+  if (upiLine != null) {
+    b.line(upiLine);
+  }
   if (footerNote.isNotEmpty) {
     b.line();
     for (final noteLine in _wrap(footerNote, charsPerLine)) {

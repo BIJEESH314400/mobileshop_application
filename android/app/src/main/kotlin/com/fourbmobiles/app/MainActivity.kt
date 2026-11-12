@@ -8,6 +8,6 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BluetoothPrinterPlugin.CHANNEL)
-            .setMethodCallHandler(BluetoothPrinterPlugin())
+            .setMethodCallHandler(BluetoothPrinterPlugin(this))
     }
 }
