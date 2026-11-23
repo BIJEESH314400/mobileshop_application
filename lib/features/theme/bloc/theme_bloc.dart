@@ -3,33 +3,42 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_font.dart';
 import '../../../core/theme/app_theme_color.dart';
 import '../../../core/utils/app_logger.dart';
 import 'theme_event.dart';
 import 'theme_state.dart';
 
-/// App-wide light/dark switch, and (2026-10-22) app-wide accent-color
-/// theme switch. Provided once at the root in app.dart (above
-/// MaterialApp), so `context.read<ThemeBloc>()` / `context.watch<ThemeBloc>()`
-/// work from any screen — right now only the Profile screen's Dark
-/// Mode row and App Theme picker use it, but any other screen can opt
-/// in the same way later.
+/// App-wide light/dark switch, (2026-10-22) app-wide accent-color
+/// theme switch, and (2026-11-20) app-wide font switch. Provided once
+/// at the root in app.dart (above MaterialApp), so
+/// `context.read<ThemeBloc>()` / `context.watch<ThemeBloc>()` work
+/// from any screen — right now only the Profile screen's Dark Mode
+/// row, App Theme picker, and Font Style picker use it, but any other
+/// screen can opt in the same way later.
 ///
-/// Both preferences persist via SharedPreferences -- dark/light since
-/// 2026-09-24 (user-reported: "set dark mode then quit again open.
-/// dark mode not show. only light mode"), theme color since
-/// 2026-10-22. Each is saved under its own prefs key every time it
-/// changes, and the app's initial values are read from those same keys
-/// BEFORE runApp() even happens (see main.dart), so there's no flash
-/// of the wrong theme on launch while this Bloc spins up.
+/// All three preferences persist via SharedPreferences -- dark/light
+/// since 2026-09-24 (user-reported: "set dark mode then quit again
+/// open. dark mode not show. only light mode"), theme color since
+/// 2026-10-22, font since 2026-11-20. Each is saved under its own
+/// prefs key every time it changes, and the app's initial values are
+/// read from those same keys BEFORE runApp() even happens (see
+/// main.dart), so there's no flash of the wrong theme/font on launch
+/// while this Bloc spins up.
 class ThemeBloc extends Bloc<ThemeEvent, ThemeState> {
   static const _prefsKey = 'isDarkMode';
   static const _colorPrefsKey = 'themeColorId';
+  static const _fontPrefsKey = 'fontId';
 
-  ThemeBloc({ThemeMode? initialMode, AppThemeColor? initialThemeColor})
-    : super(ThemeState(mode: initialMode ?? ThemeMode.light, themeColor: initialThemeColor ?? AppThemeColor.indigo)) {
+  ThemeBloc({ThemeMode? initialMode, AppThemeColor? initialThemeColor, AppFont? initialFont})
+    : super(ThemeState(
+        mode: initialMode ?? ThemeMode.light,
+        themeColor: initialThemeColor ?? AppThemeColor.indigo,
+        font: initialFont ?? AppFont.manrope,
+      )) {
     on<ThemeToggled>(_onToggled);
     on<ThemeColorChanged>(_onColorChanged);
+    on<ThemeFontChanged>(_onFontChanged);
   }
 
   /// Reads the saved light/dark preference. Called once, from main(),
@@ -61,6 +70,21 @@ class ThemeBloc extends Bloc<ThemeEvent, ThemeState> {
     } catch (e, st) {
       AppLogger.error('ThemeBloc.loadSavedThemeColor', e, st);
       return AppThemeColor.indigo;
+    }
+  }
+
+  /// Reads the saved font preference, same "before runApp()" reasoning
+  /// as [loadSavedMode]/[loadSavedThemeColor]. Caller (main.dart) is
+  /// also responsible for setting `AppFonts.current` from the result
+  /// before the first frame -- this method only reads the saved
+  /// choice, it doesn't apply it.
+  static Future<AppFont> loadSavedFont() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return AppFont.fromId(prefs.getString(_fontPrefsKey));
+    } catch (e, st) {
+      AppLogger.error('ThemeBloc.loadSavedFont', e, st);
+      return AppFont.manrope;
     }
   }
 
@@ -99,6 +123,22 @@ class ThemeBloc extends Bloc<ThemeEvent, ThemeState> {
       // the switch already took visual effect, a failed save just
       // means it won't survive the next restart.
       AppLogger.error('ThemeBloc._onColorChanged (save)', e, st);
+    }
+  }
+
+  Future<void> _onFontChanged(ThemeFontChanged event, Emitter<ThemeState> emit) async {
+    // Same "update the mutable static, then emit" mechanism as
+    // _onColorChanged above -- AppFonts.current is what
+    // buildAppTheme()/buildAppDarkTheme() actually read, and emit()
+    // below is what triggers app.dart's BlocBuilder to rebuild
+    // MaterialApp with a theme built from the new value.
+    AppFonts.current = event.font;
+    emit(state.copyWith(font: event.font));
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_fontPrefsKey, event.font.id);
+    } catch (e, st) {
+      AppLogger.error('ThemeBloc._onFontChanged (save)', e, st);
     }
   }
 }

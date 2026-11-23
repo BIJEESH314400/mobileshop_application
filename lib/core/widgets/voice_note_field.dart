@@ -13,9 +13,15 @@ enum _PendingAction { none, pause, done }
 /// Which way a recording should be translated, picked above the box
 /// before tapping the mic. `plainEnglish` is the original, untouched
 /// behavior -- recognized English speech goes in as-is, no
-/// translation. The other two both translate on Done (see
+/// translation. `plainMalayalam` (added 2026-11-13) is the same idea
+/// for Malayalam -- listens in Malayalam and writes the recognized
+/// Malayalam text as-is, no translation -- filling a real gap where
+/// the only two Malayalam-related options both forced a translation
+/// (`malayalamToEnglish`) or a non-Malayalam source
+/// (`englishToMalayalam`), with no way to just dictate a note in
+/// Malayalam script. The remaining two translate on Done (see
 /// `_finishAndClose`), one in each direction.
-enum TranslateMode { plainEnglish, englishToMalayalam, malayalamToEnglish }
+enum TranslateMode { plainEnglish, plainMalayalam, englishToMalayalam, malayalamToEnglish }
 
 /// Which language a voice recording (or a tagged run of already-
 /// recognized text) is in. See [LanguageTaggedTextController].
@@ -279,7 +285,7 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
     _sessionId++;
     final mySession = _sessionId;
     final started = await VoiceInputService.instance.startListening(
-      localeId: _mode == TranslateMode.malayalamToEnglish ? 'ml-IN' : null,
+      localeId: (_mode == TranslateMode.malayalamToEnglish || _mode == TranslateMode.plainMalayalam) ? 'ml-IN' : null,
       onResult: (text, isFinal) {
         if (!mounted || mySession != _sessionId) return;
         setState(() => _liveText = text);
@@ -548,6 +554,9 @@ class _VoiceNoteFieldBodyState extends State<VoiceNoteFieldBody> with SingleTick
       case TranslateMode.malayalamToEnglish:
         listeningLabel = 'LISTENING... (ML→EN)';
         break;
+      case TranslateMode.plainMalayalam:
+        listeningLabel = 'LISTENING... (ML)';
+        break;
       case TranslateMode.plainEnglish:
         listeningLabel = 'LISTENING...';
         break;
@@ -644,6 +653,8 @@ class _TranslateModeSelector extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _segment(context, 'English', TranslateMode.plainEnglish, AppColors.accent, p),
+          _divider(p),
+          _segment(context, 'Malayalam', TranslateMode.plainMalayalam, AppColors.voiceMalayalam, p),
           _divider(p),
           _segment(context, 'EN → ML', TranslateMode.englishToMalayalam, AppColors.voiceEnglish, p),
           _divider(p),

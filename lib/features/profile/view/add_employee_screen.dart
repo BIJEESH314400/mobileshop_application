@@ -70,10 +70,16 @@ class _AddEmployeeViewState extends State<_AddEmployeeView> {
             ..showSnackBar(SnackBar(content: Text(state.errorMessage!), backgroundColor: AppColors.danger));
         }
         if (state.isSuccess) {
-          ScaffoldMessenger.of(context)
+          // Captured BEFORE popping -- see the same fix in Add Product's
+          // listener for why calling ScaffoldMessenger.of(context) AFTER
+          // the pop can crash ("Looking up a deactivated widget's
+          // ancestor is unsafe") if the SnackBar's entrance animation is
+          // still running when this screen's Scaffold is torn down.
+          final messenger = ScaffoldMessenger.of(context);
+          Navigator.pop(context);
+          messenger
             ..hideCurrentSnackBar()
             ..showSnackBar(const SnackBar(content: Text('Employee login created')));
-          Navigator.pop(context);
         }
       },
       builder: (context, state) {

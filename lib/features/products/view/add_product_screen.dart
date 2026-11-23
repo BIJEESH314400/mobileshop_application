@@ -261,16 +261,26 @@ class _AddProductViewState extends State<_AddProductView> {
           // if it was auto-generated, this is the one moment the person
           // actually sees it before it's just a value on the product.
           final barcodeNote = (!_isEditing && (state.savedBarcode ?? '').isNotEmpty) ? ' · Barcode: ${state.savedBarcode}' : '';
-          ScaffoldMessenger.of(context)
+          // Captured BEFORE popping -- calling ScaffoldMessenger.of(context)
+          // again after the pop can crash ("Looking up a deactivated
+          // widget's ancestor is unsafe") if the SnackBar's own entrance
+          // animation is still mid-flight when this screen's Scaffold is
+          // torn down. Grabbing the state first and popping right away,
+          // then calling showSnackBar on that already-resolved state, is
+          // the safe order -- the SnackBar still shows correctly on
+          // whichever screen is now on top.
+          final messenger = ScaffoldMessenger.of(context);
+          Navigator.pop(context);
+          messenger
             ..hideCurrentSnackBar()
             ..showSnackBar(SnackBar(content: Text('${_isEditing ? 'Product updated' : 'Product saved'}$barcodeNote')));
-          Navigator.pop(context);
         }
         if (state.isDeleted) {
-          ScaffoldMessenger.of(context)
+          final messenger = ScaffoldMessenger.of(context);
+          Navigator.pop(context);
+          messenger
             ..hideCurrentSnackBar()
             ..showSnackBar(const SnackBar(content: Text('Product deleted')));
-          Navigator.pop(context);
         }
       },
       builder: (context, state) {

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:printing/printing.dart';
 
 import '../../../core/constants/shop_constants.dart';
 import '../../../core/models/payment_settings.dart';
@@ -466,6 +465,11 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
   // this early return is just the belt-and-suspenders second guard.
   bool _exporting = false;
 
+  // Added 2026-11-13: this used to go straight to Printing.sharePdf,
+  // same as the Reports export and the receipt share did before
+  // 2026-11-12 -- now it opens PdfPreviewScreen first here too, so
+  // every PDF leaving Sales History is actually seen before it's sent
+  // anywhere, not just the receipt.
   Future<void> _exportSalesPdf(BuildContext context, List<Sale> sales) async {
     if (_exporting) return;
     setState(() => _exporting = true);
@@ -478,7 +482,13 @@ class _SalesHistoryViewState extends State<_SalesHistoryView> {
         shop: shop,
         tax: tax,
       );
-      await Printing.sharePdf(bytes: bytes, filename: 'sales-history.pdf');
+      if (!context.mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PdfPreviewScreen(title: 'Sales List Preview', fileName: 'sales-history.pdf', bytes: bytes),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _exporting = false);
     }

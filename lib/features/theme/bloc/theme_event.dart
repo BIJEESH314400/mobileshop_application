@@ -1,9 +1,11 @@
 import 'package:equatable/equatable.dart';
 
+import '../../../core/theme/app_font.dart';
 import '../../../core/theme/app_theme_color.dart';
 
-/// Events for [ThemeBloc] -- light/dark, and (2026-10-22) which of the
-/// 6 accent-color themes is active. Kept as a proper Event->Bloc->State
+/// Events for [ThemeBloc] -- light/dark, (2026-10-22) which of the 6
+/// accent-color themes is active, and (2026-11-20) which of the 5
+/// fonts is active. Kept as a proper Event->Bloc->State
 /// class (not a Cubit) to match the rest of this project's deliberate
 /// all-Bloc convention (see SplashBloc/LoginBloc), even though a plain
 /// on/off flag would normally be a textbook Cubit case — see R&D
@@ -27,4 +29,13 @@ class ThemeColorChanged extends ThemeEvent {
 
   @override
   List<Object?> get props => [color];
+}
+
+/// Dispatched from the Profile screen's Font Style picker sheet.
+class ThemeFontChanged extends ThemeEvent {
+  final AppFont font;
+  const ThemeFontChanged(this.font);
+
+  @override
+  List<Object?> get props => [font];
 }

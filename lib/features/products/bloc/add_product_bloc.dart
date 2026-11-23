@@ -38,7 +38,9 @@ class AddProductBloc extends Bloc<AddProductEvent, AddProductState> {
         // Commas are just for readability while typing (e.g. "68,999") —
         // strip them before parsing, since a comma isn't a valid digit.
         price: double.parse(event.price.replaceAll(',', '').trim()),
-        stockQty: int.parse(event.stockQty.trim()),
+        // Stock Qty is optional on this form -- left blank, it just
+        // means "0 in stock" rather than blocking the save.
+        stockQty: int.tryParse(event.stockQty.trim()) ?? 0,
         sku: event.sku.trim(),
         condition: event.condition,
         description: event.description.trim(),
@@ -78,16 +80,24 @@ class AddProductBloc extends Bloc<AddProductEvent, AddProductState> {
     }
   }
 
+  // Only Product Name and Price are mandatory now -- Category, Brand,
+  // and Stock Qty are all optional and simply default to their empty
+  // value (''/0, see Product.fromMap) when left blank, same as SKU,
+  // Barcode, and Description already did before this change.
   String? _validate(AddProductSubmitted event) {
     if (event.name.trim().isEmpty) return 'Product name is required';
-    if (event.category.trim().isEmpty) return 'Please choose a category';
-    if (event.brand.trim().isEmpty) return 'Please choose a brand';
 
     final price = double.tryParse(event.price.replaceAll(',', '').trim());
     if (price == null || price <= 0) return 'Enter a valid price';
 
-    final stock = int.tryParse(event.stockQty.trim());
-    if (stock == null || stock < 0) return 'Enter a valid stock quantity';
+    // Stock Qty: not required, but if something WAS typed, it still
+    // has to be a real non-negative number -- "abc" or "-1" is still
+    // rejected, only *blank* is now allowed through.
+    final stockText = event.stockQty.trim();
+    if (stockText.isNotEmpty) {
+      final stock = int.tryParse(stockText);
+      if (stock == null || stock < 0) return 'Enter a valid stock quantity';
+    }
 
     return null;
   }

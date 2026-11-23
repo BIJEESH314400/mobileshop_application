@@ -28,6 +28,7 @@ import 'payment_settings_screen.dart';
 import 'tax_invoice_settings_screen.dart';
 import 'help_center_screen.dart';
 import 'theme_color_picker_sheet.dart';
+import 'font_picker_sheet.dart';
 
 /// Profile — matches the CellPoint design canvas (account card, three
 /// grouped settings sections, Log Out).
@@ -175,6 +176,7 @@ class _ProfileViewState extends State<_ProfileView> {
     final p = AppPalette.of(context);
     final darkOn = context.watch<ThemeBloc>().state.isDark;
     final currentThemeColor = context.watch<ThemeBloc>().state.themeColor;
+    final currentFont = context.watch<ThemeBloc>().state.font;
     final userState = context.watch<CurrentUserBloc>().state;
     final AppUser? user = userState.user;
 
@@ -470,6 +472,19 @@ class _ProfileViewState extends State<_ProfileView> {
                                   // "6 app themes" feature). See
                                   // theme_color_picker_sheet.dart.
                                   onTap: () => showThemeColorPickerSheet(context, current: currentThemeColor),
+                                ),
+                                showBottomBorder: true,
+                              ),
+                              _MenuRow(
+                                palette: p,
+                                data: _MenuRowData(
+                                  icon: Icons.font_download_outlined,
+                                  label: 'Font Style · ${currentFont.label}',
+                                  // Separate from App Theme/Dark Mode above --
+                                  // this only changes the font family used
+                                  // everywhere (2026-11-20). See
+                                  // font_picker_sheet.dart.
+                                  onTap: () => showFontPickerSheet(context, current: currentFont),
                                 ),
                                 showBottomBorder: true,
                               ),

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'core/theme/app_colors.dart';
+import 'core/theme/app_font.dart';
 import 'features/theme/bloc/theme_bloc.dart';
 
 void main() {
@@ -54,7 +55,18 @@ void main() {
     final initialThemeColor = await ThemeBloc.loadSavedThemeColor();
     AppColors.accent = initialThemeColor.color;
 
-    runApp(MobileShopApp(initialThemeMode: initialThemeMode, initialThemeColor: initialThemeColor));
+    // Same reasoning again, for the saved font (2026-11-20, "Profile >
+    // Font Style" feature) -- AppFonts.current must be set before the
+    // very first frame builds, or the launch would flash Manrope
+    // before correcting itself to whatever was actually picked.
+    final initialFont = await ThemeBloc.loadSavedFont();
+    AppFonts.current = initialFont;
+
+    runApp(MobileShopApp(
+      initialThemeMode: initialThemeMode,
+      initialThemeColor: initialThemeColor,
+      initialFont: initialFont,
+    ));
   }, (error, stackTrace) {
     // Catches everything else -- anything thrown outside the Flutter
     // framework's own error handling (an uncaught Future error, or

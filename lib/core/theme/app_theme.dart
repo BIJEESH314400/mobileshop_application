@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
 import 'app_colors.dart';
+import 'app_font.dart';
 
 ThemeData buildAppTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    fontFamily: 'Manrope',
+    // Was hardcoded 'Manrope' -- now reads the current pick from
+    // Profile > Font Style (2026-11-20), same "read fresh on every
+    // rebuild" pattern AppColors.accent already uses for App Theme.
+    fontFamily: AppFonts.current.fontFamily,
     scaffoldBackgroundColor: AppColors.background,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,
@@ -29,7 +33,7 @@ ThemeData buildAppDarkTheme() {
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    fontFamily: 'Manrope',
+    fontFamily: AppFonts.current.fontFamily,
     scaffoldBackgroundColor: AppColors.darkBackground,
     colorScheme: ColorScheme.fromSeed(
       seedColor: AppColors.accent,

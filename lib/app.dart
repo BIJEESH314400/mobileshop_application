@@ -5,6 +5,7 @@ import 'core/routes/app_routes.dart';
 import 'core/routes/root_navigator_key.dart';
 import 'core/services/chat_notification_watcher.dart';
 import 'core/services/idle_lock_gate.dart';
+import 'core/theme/app_font.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/app_theme_color.dart';
 import 'features/theme/bloc/theme_bloc.dart';
@@ -13,10 +14,12 @@ import 'features/theme/bloc/theme_state.dart';
 class MobileShopApp extends StatelessWidget {
   final ThemeMode initialThemeMode;
   final AppThemeColor initialThemeColor;
+  final AppFont initialFont;
   const MobileShopApp({
     super.key,
     this.initialThemeMode = ThemeMode.light,
     this.initialThemeColor = AppThemeColor.indigo,
+    this.initialFont = AppFont.manrope,
   });
 
   @override
@@ -33,7 +36,11 @@ class MobileShopApp extends StatelessWidget {
     return IdleLockGate(
       child: ChatNotificationWatcher(
         child: BlocProvider(
-          create: (_) => ThemeBloc(initialMode: initialThemeMode, initialThemeColor: initialThemeColor),
+          create: (_) => ThemeBloc(
+            initialMode: initialThemeMode,
+            initialThemeColor: initialThemeColor,
+            initialFont: initialFont,
+          ),
           child: BlocBuilder<ThemeBloc, ThemeState>(
             builder: (context, themeState) {
               return MaterialApp(
